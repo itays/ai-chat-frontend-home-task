@@ -32,3 +32,9 @@ export const createChatStore = () =>
   }));
 
 export type ChatStore = ReturnType<typeof createChatStore>;
+
+/** The freshest summary of a Chat: from its Snapshot once loaded, else from the chat list. */
+export const latestSummary = ({ summary, chat }: ChatEntry): ChatSummary => {
+  const { id, title, status, updatedAt } = chat ?? summary;
+  return { id, title, status, updatedAt };
+};

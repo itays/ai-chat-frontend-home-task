@@ -1,6 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = "http://127.0.0.1:5173";
+// E2E runs its own backend and frontend on dedicated ports so it never
+// touches the `npm start` servers (4000 / 5173) or their in-memory state.
+const BACKEND_PORT = 4100;
+const FRONTEND_PORT = 5174;
+const backendURL = `http://127.0.0.1:${BACKEND_PORT}`;
+const baseURL = `http://127.0.0.1:${FRONTEND_PORT}`;
 const isCI = !!process.env.CI;
 
 export default defineConfig({
@@ -22,9 +27,19 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: {
-    command: "npm run dev -- --host 127.0.0.1",
-    url: baseURL,
-    reuseExistingServer: !isCI,
-  },
+  webServer: [
+    {
+      command: "node ../backend/src/main.ts",
+      env: { PORT: String(BACKEND_PORT), DELAY_SCALE: "0.05" },
+      // Socket.IO's polling handshake answers 200 once the server is up.
+      url: `${backendURL}/socket.io/?EIO=4&transport=polling`,
+      reuseExistingServer: !isCI,
+    },
+    {
+      command: `npm run dev -- --host 127.0.0.1 --port ${FRONTEND_PORT}`,
+      env: { VITE_BACKEND_URL: backendURL },
+      url: baseURL,
+      reuseExistingServer: !isCI,
+    },
+  ],
 });
