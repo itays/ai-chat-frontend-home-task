@@ -1,6 +1,7 @@
 import { act, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Block, Message } from "@/chat/protocol.ts";
+import type { Block, Chat, Message } from "@/chat/protocol.ts";
+import type { ChatStore } from "@/chat/store.ts";
 import { renderApp } from "@/test/renderApp.tsx";
 
 const message = (
@@ -40,6 +41,16 @@ const renderChatWithStore = (...messages: Message[]) => {
   });
   return { log: within(screen.getByRole("log", { name: "Messages" })), store };
 };
+
+/** Applies `changes` to the open Chat, as synced events would. */
+const updateChat = (store: ChatStore, changes: Partial<Chat>) =>
+  act(() =>
+    store.setState(({ chats }) => ({
+      chats: {
+        c1: { ...chats.c1!, chat: { ...chats.c1!.chat!, ...changes } },
+      },
+    }))
+  );
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -215,21 +226,9 @@ describe("messages", () => {
       log.getByText("This content couldn't be displayed.")
     ).toBeInTheDocument();
 
-    act(() =>
-      store.setState(({ chats }) => ({
-        chats: {
-          c1: {
-            ...chats.c1!,
-            chat: {
-              ...chats.c1!.chat!,
-              messages: [
-                assistant({ id: "b1", type: "markdown", text: "Recovered" }),
-              ],
-            },
-          },
-        },
-      }))
-    );
+    updateChat(store, {
+      messages: [assistant({ id: "b1", type: "markdown", text: "Recovered" })],
+    });
 
     expect(log.getByText("Recovered")).toBeInTheDocument();
     expect(
@@ -249,35 +248,68 @@ describe("messages", () => {
       assistant(toolCall, { id: "b2", type: "markdown", text: "Look" })
     );
 
-    act(() =>
-      store.setState(({ chats }) => {
-        const chat = chats.c1!.chat!;
-        return {
-          chats: {
-            c1: {
-              ...chats.c1!,
-              chat: {
-                ...chat,
-                messages: [
-                  assistant(
-                    { ...toolCall, status: "succeeded", summary: "All clear" },
-                    { id: "b2", type: "markdown", text: "Looks fine" }
-                  ),
-                  message("m-u", "user", [
-                    { id: "b3", type: "markdown", text: "Thanks" },
-                  ]),
-                ],
-              },
-            },
-          },
-        };
-      })
-    );
+    updateChat(store, {
+      messages: [
+        assistant(
+          { ...toolCall, status: "succeeded", summary: "All clear" },
+          { id: "b2", type: "markdown", text: "Looks fine" }
+        ),
+        message("m-u", "user", [
+          { id: "b3", type: "markdown", text: "Thanks" },
+        ]),
+      ],
+    });
 
     expect(
       log.getByRole("group", { name: "Check sign-ins" })
     ).toHaveTextContent(/Succeeded.*All clear/);
     expect(log.getByText("Looks fine")).toBeInTheDocument();
     expect(log.getByText("Thanks")).toBeInTheDocument();
+  });
+});
+
+describe("while the assistant responds", () => {
+  const typingIndicator = () => screen.queryByText("Assistant is typing");
+
+  it("shows a typing indicator until the response's first Block arrives", () => {
+    const sent = message("m-u", "user", [
+      { id: "b1", type: "markdown", text: "Hi" },
+    ]);
+    const { log, store } = renderChatWithStore(sent);
+    expect(typingIndicator()).not.toBeInTheDocument();
+
+    updateChat(store, { status: "responding" });
+    expect(typingIndicator()).toBeInTheDocument();
+
+    const reply: Message = {
+      ...message("m-a", "assistant", []),
+      status: "streaming",
+    };
+    updateChat(store, { messages: [sent, reply] });
+    expect(typingIndicator()).toBeInTheDocument();
+
+    updateChat(store, {
+      messages: [
+        sent,
+        { ...reply, blocks: [{ id: "b2", type: "markdown", text: "Let me" }] },
+      ],
+    });
+    expect(typingIndicator()).not.toBeInTheDocument();
+    expect(log.getByText("Let me")).toBeInTheDocument();
+  });
+
+  it("marks a streaming Message busy until it completes", () => {
+    const reply: Message = {
+      ...assistant({ id: "b1", type: "markdown", text: "Let me" }),
+      status: "streaming",
+    };
+    const { log, store } = renderChatWithStore(reply);
+    const replyMessage = () =>
+      log.getByText("Let me").closest("[data-slot=message]");
+    expect(replyMessage()).toHaveAttribute("aria-busy", "true");
+
+    updateChat(store, { messages: [{ ...reply, status: "completed" }] });
+
+    expect(replyMessage()).not.toHaveAttribute("aria-busy");
   });
 });
