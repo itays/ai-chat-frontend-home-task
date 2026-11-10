@@ -54,7 +54,7 @@ A per-Chat counter that increases by exactly one with every event, used to tell 
 _Avoid_: Version, revision, offset
 
 **Gap**:
-An event whose Sequence Number skips past the next expected one, meaning the client has missed events for that Chat and must take a fresh Snapshot.
+An event whose Sequence Number skips past the next expected one, or that refers to a Message or Block the client does not have, meaning the client has missed events for that Chat and must take a fresh Snapshot.
 _Avoid_: Out-of-order event
 
 ## Relationships
