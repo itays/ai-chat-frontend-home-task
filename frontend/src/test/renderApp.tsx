@@ -6,25 +6,31 @@ import {
   ChatClientProvider,
   type ChatClient,
 } from "@/chat/ChatClientContext.tsx";
-import { createChatStore, type ChatEntry } from "@/chat/store.ts";
+import {
+  createChatStore,
+  type ChatEntry,
+  type ConnectionStatus,
+} from "@/chat/store.ts";
 
-/** Renders the whole app at `url`, connected, with `chats` already in the store. */
+/** Renders the whole app at `url`, connected unless told otherwise, with `chats` already in the store. */
 export const renderApp = ({
   url = "/",
   chats,
+  connection = "connected",
 }: {
   url?: string;
   chats: Record<string, ChatEntry>;
+  connection?: ConnectionStatus;
 }) => {
   window.history.replaceState(null, "", url);
   const store = createChatStore();
   store.setState({
-    connection: "connected",
+    connection,
     chatOrder: Object.keys(chats),
     chats,
   });
   const sync = {
-    retry: vi.fn<ChatClient["sync"]["retry"]>(),
+    retry: vi.fn<ChatClient["sync"]["retry"]>(() => Promise.resolve()),
     retryChat: vi.fn<ChatClient["sync"]["retryChat"]>(),
     sendMessage: vi.fn<ChatClient["sync"]["sendMessage"]>(),
   };

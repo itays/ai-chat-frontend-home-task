@@ -4,6 +4,7 @@ import { useShallow } from "zustand/shallow";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { useChatState } from "@/chat/ChatClientContext.tsx";
+import type { ChatStatus } from "@/chat/protocol.ts";
 import type { ChatStoreState } from "@/chat/store.ts";
 import { useComposerEntry, type ComposerStore } from "./composerStore.ts";
 import { ghostText } from "./suggestion.ts";
@@ -13,10 +14,24 @@ const MAX_MESSAGE_LENGTH = 2000;
 
 const selectComposerChat =
   (chatId: string) =>
-  ({ chats }: ChatStoreState) => {
+  ({ chats, connection }: ChatStoreState) => {
     const chat = chats[chatId]?.chat;
-    return { status: chat?.status, suggestion: chat?.suggestion ?? null };
+    return {
+      connected: connection === "connected",
+      status: chat?.status,
+      suggestion: chat?.suggestion ?? null,
+    };
   };
+
+const blockedReasonFor = (
+  connected: boolean,
+  status: ChatStatus | undefined
+): string | null => {
+  if (!connected) {
+    return "Wait for the connection to come back";
+  }
+  return status === "responding" ? "Wait for the assistant to finish" : null;
+};
 
 /** Shared by the textarea and its ghost-text mirror, so both wrap identically. */
 const FIELD_TEXT =
@@ -30,7 +45,7 @@ export const Composer = ({
   chatId: string;
   composer: ComposerStore;
 }) => {
-  const { status, suggestion } = useChatState(
+  const { connected, status, suggestion } = useChatState(
     useShallow(selectComposerChat(chatId))
   );
   const { draft, sending, error } = useComposerEntry(composer, chatId);
@@ -40,8 +55,7 @@ export const Composer = ({
   const blockedReasonId = useId();
 
   const ghost = ghostText(draft, suggestion);
-  const blockedReason =
-    status === "responding" ? "Wait for the assistant to finish" : null;
+  const blockedReason = blockedReasonFor(connected, status);
   const canSend = draft.trim() !== "" && !sending && blockedReason === null;
 
   const send = () => {

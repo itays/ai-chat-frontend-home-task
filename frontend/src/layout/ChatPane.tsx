@@ -1,8 +1,20 @@
-import { MessageSquareIcon, SearchXIcon } from "lucide-react";
+import {
+  MessageSquareIcon,
+  SearchXIcon,
+  TriangleAlertIcon,
+} from "lucide-react";
 import { Fragment, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/shallow";
 import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -22,7 +34,9 @@ import { ResponseAnnouncer } from "./ResponseAnnouncer.tsx";
 type Pane =
   | { view: "none" | "not-found"; title?: never }
   | { view: "loading"; title?: string }
-  | { view: "ready"; title: string; status: ChatStatus };
+  | { view: "failed"; title: string }
+  /** `stale` when refreshing its Snapshot failed, so events are no longer applied. */
+  | { view: "ready"; title: string; status: ChatStatus; stale: boolean };
 
 const selectPane =
   (chatId: string | null) =>
@@ -34,9 +48,11 @@ const selectPane =
     if (Object.hasOwn(chats, chatId)) {
       const entry = chats[chatId]!;
       const { title, status } = latestSummary(entry);
-      return entry.chat
-        ? { view: "ready", title, status }
-        : { view: "loading", title };
+      const failed = entry.sync === "failed";
+      if (entry.chat) {
+        return { view: "ready", title, status, stale: failed };
+      }
+      return { view: failed ? "failed" : "loading", title };
     }
     // Until the chat list arrives, an id cannot be told apart from an unknown one.
     return { view: chatOrder.length === 0 ? "loading" : "not-found" };
@@ -46,7 +62,7 @@ const selectPane =
 export const ChatPane = ({ chatId }: { chatId: string | null }) => {
   const pane = useChatState(useShallow(selectPane(chatId)));
   const { title } = pane;
-  const { sendMessage } = useChatActions();
+  const { sendMessage, retryChat } = useChatActions();
   // Owned here, above the per-Chat Composer, so drafts and sends survive switching Chats.
   const [composer] = useState(() => createComposerStore(sendMessage));
 
@@ -72,10 +88,38 @@ export const ChatPane = ({ chatId }: { chatId: string | null }) => {
         />
       )}
       {pane.view === "loading" && <ChatSkeleton />}
+      {pane.view === "failed" && chatId !== null && (
+        <PaneMessage
+          icon={<TriangleAlertIcon />}
+          title="Couldn't load this chat"
+          description="Something went wrong while fetching its messages."
+          action={<Button onClick={() => retryChat(chatId)}>Retry</Button>}
+        />
+      )}
       {pane.view === "ready" && chatId !== null && (
         // Keyed so each Chat opens at its latest Message, and a response
         // already under way when it opens is not announced.
         <Fragment key={chatId}>
+          {pane.stale && (
+            <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-4">
+              <Alert>
+                <TriangleAlertIcon aria-hidden="true" />
+                <AlertTitle>This chat may be out of date</AlertTitle>
+                <AlertDescription>
+                  New messages couldn't be loaded.
+                </AlertDescription>
+                <AlertAction>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => retryChat(chatId)}
+                  >
+                    Retry
+                  </Button>
+                </AlertAction>
+              </Alert>
+            </div>
+          )}
           <MessageList chatId={chatId} />
           {pane.status === "finished" ? (
             <p className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-2 pb-6 text-center text-sm text-muted-foreground">
@@ -95,17 +139,22 @@ const PaneMessage = ({
   icon,
   title,
   description,
+  action,
 }: {
   icon: ReactNode;
   title: string;
   description: string;
+  action?: ReactNode;
 }) => (
   <Empty>
     <EmptyHeader>
       <EmptyMedia variant="icon">{icon}</EmptyMedia>
-      <EmptyTitle>{title}</EmptyTitle>
+      <EmptyTitle role="heading" aria-level={2}>
+        {title}
+      </EmptyTitle>
       <EmptyDescription>{description}</EmptyDescription>
     </EmptyHeader>
+    {action && <EmptyContent>{action}</EmptyContent>}
   </Empty>
 );
 

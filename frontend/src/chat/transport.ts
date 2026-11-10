@@ -21,6 +21,7 @@ export type ChatTransport = {
     payload: RequestMap[N]["payload"]
   ): Promise<Ack<RequestMap[N]["response"]>>;
   subscribe(listener: (signal: TransportSignal) => void): () => void;
+  /** Starts a connection attempt right away. Only called while disconnected. */
   connect(): void;
 };
 
@@ -53,7 +54,9 @@ export const createSocketTransport = (url: string): ChatTransport => {
       return () => listeners.delete(listener);
     },
     connect: () => {
-      socket.connect();
+      // While the manager waits out a reconnection backoff, connect() alone
+      // does nothing; disconnecting first cancels the wait so the attempt starts now.
+      socket.disconnect().connect();
     },
   };
 };

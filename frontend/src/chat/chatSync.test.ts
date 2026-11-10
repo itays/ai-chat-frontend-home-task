@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createChatSync } from "./chatSync.ts";
 import type {
   Ack,
@@ -379,6 +379,34 @@ describe("failed requests", () => {
       connection: "connected",
       chats: { a: { sync: "ready" } },
     });
+  });
+
+  it("settles a retry once the reconnection attempt fails", async () => {
+    const { fake, sync } = setup();
+    fake.signal({ type: "connect_error" });
+
+    const settled = vi.fn<() => void>();
+    void sync.retry().then(settled);
+    await flush();
+    expect(settled).not.toHaveBeenCalled();
+
+    fake.signal({ type: "connect_error" });
+    await flush();
+    expect(settled).toHaveBeenCalled();
+  });
+
+  it("settles a retry once the chats are listed again", async () => {
+    const { fake, sync } = setup();
+    fake.signal({ type: "connect" });
+    await fake.fail("chats:list", undefined, new Error("timed out"));
+
+    const settled = vi.fn<() => void>();
+    void sync.retry().then(settled);
+    await flush();
+    expect(settled).not.toHaveBeenCalled();
+
+    await fake.fail("chats:list", undefined, new Error("timed out"));
+    expect(settled).toHaveBeenCalled();
   });
 });
 

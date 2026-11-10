@@ -34,6 +34,12 @@ export const createChatSync = ({
   let listing = false;
   let everConnected = false;
   let socketConnected = false;
+  /** Resolvers for retries waiting on the outcome of the next connection or listing attempt. */
+  let pendingRetries: (() => void)[] = [];
+  const settleRetries = () => {
+    pendingRetries.forEach((settle) => settle());
+    pendingRetries = [];
+  };
 
   /** Sends a request, resolving to null if no acknowledgement arrives. */
   const request = <N extends RequestName>(
@@ -94,6 +100,7 @@ export const createChatSync = ({
     const startedIn = generation;
     listing = true;
     const ack = await request("chats:list", undefined);
+    settleRetries();
     if (startedIn !== generation) {
       return;
     }
@@ -155,6 +162,7 @@ export const createChatSync = ({
         store.setState({
           connection: everConnected ? "reconnecting" : "unavailable",
         });
+        settleRetries();
         return;
       case "event":
         receive(signal.event);
@@ -163,14 +171,19 @@ export const createChatSync = ({
   });
 
   return {
-    /** Recovers from an unavailable server: relists if connected, otherwise reconnects. */
-    retry: () => {
-      if (socketConnected) {
-        void syncAll();
-      } else {
-        transport.connect();
-      }
-    },
+    /**
+     * Recovers from an unavailable server: relists if connected, otherwise
+     * reconnects. Settles once that attempt succeeds or fails.
+     */
+    retry: () =>
+      new Promise<void>((settle) => {
+        pendingRetries.push(settle);
+        if (socketConnected) {
+          void syncAll();
+        } else {
+          transport.connect();
+        }
+      }),
     retryChat: (chatId: string) => void loadSnapshot(chatId),
     sendMessage: async (chatId: string, text: string): Promise<SendResult> => {
       if (!socketConnected) {

@@ -7,6 +7,7 @@ import {
   createSocketChatClient,
 } from "./chat/ChatClientContext.tsx";
 import { BACKEND_URL } from "./config.ts";
+import { AppErrorBoundary } from "./layout/AppErrorBoundary.tsx";
 import "./index.css";
 
 // Created outside React so StrictMode's double mount cannot open two sockets.
@@ -16,7 +17,9 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ChatClientProvider client={chatClient}>
       <TooltipProvider>
-        <App />
+        <AppErrorBoundary>
+          <App />
+        </AppErrorBoundary>
       </TooltipProvider>
     </ChatClientProvider>
   </StrictMode>
