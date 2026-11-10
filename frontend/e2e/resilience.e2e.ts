@@ -16,6 +16,7 @@ test.afterEach(() => {
 test("shows an error when the server is unreachable, and connects on Retry once it is back", async ({
   page,
 }) => {
+  await page.clock.install();
   await page.route(SOCKET_IO, (route) => route.abort());
   await page.goto("/");
 
@@ -23,13 +24,15 @@ test("shows an error when the server is unreachable, and connects on Retry once 
     page.getByRole("heading", { name: "Can't reach the server" })
   ).toBeVisible();
 
+  // Pausing stops the socket's reconnection backoff timer, so only Retry can connect.
+  // Not before this point: Engine.IO reports the failed first connect from a timer too.
+  await page.clock.pauseAt(Date.now() + 100);
   await page.unroute(SOCKET_IO);
   await page.getByRole("button", { name: "Retry" }).click();
 
-  // Faster than the socket's own reconnection backoff, so it was the Retry that connected.
   await expect(
     page.getByRole("navigation", { name: "Chats" }).getByRole("button")
-  ).toHaveCount(3, { timeout: 1_000 });
+  ).toHaveCount(3);
 });
 
 test("shows a banner and holds sending while the connection is down, then recovers", async ({

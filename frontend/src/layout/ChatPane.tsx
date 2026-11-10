@@ -3,7 +3,7 @@ import {
   SearchXIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useState } from "react";
 import { useShallow } from "zustand/shallow";
 import {
   Alert,
@@ -12,14 +12,6 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -29,6 +21,7 @@ import { latestSummary, type ChatStoreState } from "@/chat/store.ts";
 import { Composer } from "@/composer/Composer.tsx";
 import { createComposerStore } from "@/composer/composerStore.ts";
 import { MessageList } from "@/messages/MessageList.tsx";
+import { PaneMessage } from "./PaneMessage.tsx";
 import { ResponseAnnouncer } from "./ResponseAnnouncer.tsx";
 
 type Pane =
@@ -100,26 +93,7 @@ export const ChatPane = ({ chatId }: { chatId: string | null }) => {
         // Keyed so each Chat opens at its latest Message, and a response
         // already under way when it opens is not announced.
         <Fragment key={chatId}>
-          {pane.stale && (
-            <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-4">
-              <Alert>
-                <TriangleAlertIcon aria-hidden="true" />
-                <AlertTitle>This chat may be out of date</AlertTitle>
-                <AlertDescription>
-                  New messages couldn't be loaded.
-                </AlertDescription>
-                <AlertAction>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => retryChat(chatId)}
-                  >
-                    Retry
-                  </Button>
-                </AlertAction>
-              </Alert>
-            </div>
-          )}
+          {pane.stale && <StaleChatAlert onRetry={() => retryChat(chatId)} />}
           <MessageList chatId={chatId} />
           {pane.status === "finished" ? (
             <p className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-2 pb-6 text-center text-sm text-muted-foreground">
@@ -135,27 +109,19 @@ export const ChatPane = ({ chatId }: { chatId: string | null }) => {
   );
 };
 
-const PaneMessage = ({
-  icon,
-  title,
-  description,
-  action,
-}: {
-  icon: ReactNode;
-  title: string;
-  description: string;
-  action?: ReactNode;
-}) => (
-  <Empty>
-    <EmptyHeader>
-      <EmptyMedia variant="icon">{icon}</EmptyMedia>
-      <EmptyTitle role="heading" aria-level={2}>
-        {title}
-      </EmptyTitle>
-      <EmptyDescription>{description}</EmptyDescription>
-    </EmptyHeader>
-    {action && <EmptyContent>{action}</EmptyContent>}
-  </Empty>
+const StaleChatAlert = ({ onRetry }: { onRetry: () => void }) => (
+  <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-4">
+    <Alert>
+      <TriangleAlertIcon aria-hidden="true" />
+      <AlertTitle>This chat may be out of date</AlertTitle>
+      <AlertDescription>New messages couldn't be loaded.</AlertDescription>
+      <AlertAction>
+        <Button size="sm" variant="outline" onClick={onRetry}>
+          Retry
+        </Button>
+      </AlertAction>
+    </Alert>
+  </div>
 );
 
 const ChatSkeleton = () => (
