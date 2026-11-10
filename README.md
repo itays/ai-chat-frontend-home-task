@@ -171,17 +171,13 @@ The project was built with Claude Code, following the evidence in this repositor
 3. **Design grilling.** A design session ended in [`GLOSSARY.md`](GLOSSARY.md), two ADRs, and [`docs/plan.md`](docs/plan.md) ("Outcome of the design grilling"), committed before any feature code. The glossary's terms are used in code, comments, test names, and commit messages.
 4. **One commit per slice.** The plan splits the work into nine slices, each landed as a commit with its tests, sometimes followed by a fix-up commit. Constraints one slice leaves for a later one are written into the later slice's entry in the plan, so each agent session starts from the plan rather than from chat history. Slice 4 was built on its own worktree branch and merged back.
 5. **Review.** Some commits record what review caught: CI had run only `@smoke`, so 9 of 10 Playwright tests never ran there (`870191f`); a failed relist after a reconnect replaced the app with the full-page error and lost drafts (`87f1d96`).
-6. **Architecture review.** The Chat view module replaced rules that each component had derived from the store on its own.
+6. **Architecture review.** Before the last slice, an architecture review (Claude Code's `improve-codebase-architecture` skill, with a subagent reading the code) found that `ChatPane`, `Composer`, and `App` each decoded the raw store on their own to decide what a Chat shows and whether it can be sent to, and inferred "the Chat list has arrived" from an empty array. The fix gives them one module to switch over, `chat/chatView.ts`, and has `chatSync` record that the list has arrived (`09b84a4`). Three smaller findings were left as they are: UI tests seed the store by hand instead of going through `chatSync` with the fake transport, `ChatPane` owns the per-Chat drafts, and `ChatPane` enforces the remount-per-Chat rule that `ResponseAnnouncer` relies on.
 
 Commits made by the agent carry a `Co-Authored-By: Claude` trailer.
 
-<!-- TODO(author): Describe your own role: what you decided during the grilling, what you reviewed or rewrote by hand, and how you checked the agent's work. -->
+**My role.** I made the design calls during the grilling (state model, libraries, scope), reviewed every slice's diff, and checked the behaviour in the browser and in the tests before each commit. The agent wrote most of the code.
 
-<!-- TODO(author): Say whether slices were built test-first (TDD) or with tests alongside; the history shows tests landing in the same commit as the code, not their order. -->
-
-<!-- TODO(author): Describe the architecture review that led to the Chat view refactor: who ran it and what it found. -->
-
-<!-- TODO(author): Optional: where the agent went wrong or needed correction, and what you would do differently. -->
+**Testing approach.** The protocol logic (the reducer and its Sequence Number gate, `chatSync`, and Block validation) was written test-first. UI components got their tests alongside the code, written against `App` and queried by role.
 
 ## Left out and next steps
 
@@ -193,5 +189,3 @@ Commits made by the agent carry a `Co-Authored-By: Claude` trailer.
 - **Long Chats.** The message list is not virtualised. The scripted Chats are short, so it was not needed.
 - **E2E isolation.** The e2e specs share one backend and coordinate which Chat each one advances. A backend per spec, or a reset hook, would remove that coupling, but the backend must not be modified.
 - **Error detail.** Send failures other than a Rejected Message (timeout, disconnect, other protocol errors) share one generic message.
-
-<!-- TODO(author): Add anything else you chose to leave out within the time box. -->
