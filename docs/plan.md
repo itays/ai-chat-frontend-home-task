@@ -41,7 +41,7 @@ Outcome of the design grilling. Vocabulary follows [`GLOSSARY.md`](../GLOSSARY.m
 
 ### Testing
 - **Vitest:** reducer and sequence gate (in-order, duplicate, Gap, events before Snapshot), block validation, input Suggestion/Tab behaviour.
-- **Playwright smoke** (`@smoke`, in CI): real backend as a second `webServer` with `DELAY_SCALE=0.05` on port 4100, frontend on 5174 with `VITE_BACKEND_URL`. Open a Chat → Tab → send → wait for finish → reload → state restored.
+- **Playwright e2e** (`chromium` project, all of it in CI; `@smoke` marks the full-Turn spec): real backend as a second `webServer` with `DELAY_SCALE=0.05` on port 4100, frontend on 5174 with `VITE_BACKEND_URL`. Open a Chat → Tab → send → wait for finish → reload → state restored.
 - **Playwright visual** (`@visual`, local only): fake Socket.IO server with fixture Snapshots, frontend on 5175. See ADR-0002. Screenshots: empty state; all block types (incl. escaped `<img onerror>`, running/succeeded/failed Tool Call, table, `chart` and `approval_request`); responding (typing indicator, half-streamed Message); ghost-text Suggestion; Rejected Message error; finished footer; disconnected banner; sidebar with all three statuses; one mobile viewport.
 
 ### Deliverables
@@ -53,8 +53,8 @@ Outcome of the design grilling. Vocabulary follows [`GLOSSARY.md`](../GLOSSARY.m
 2. **Layout** — sidebar with statuses and unread, URL selection, empty state, not-found, skeleton.
 3. **Blocks** — markdown, Tool Call, table, Unknown Block with validation and per-block error boundary; user Message rendering.
 4. **Input** — textarea, ghost-text Suggestion, Tab, send/ack flow, Rejected Message and other errors, per-Chat drafts.
-5. **Status and scroll** — typing indicator, streaming caret, finished footer, `message-scroller`, live region.
+5. **Status and scroll** — typing indicator, streaming caret, finished footer, `message-scroller`, live region. `message-scroller` replaces the interim scroll container in `MessageList.tsx` and takes over its `role="log"` with `aria-live="off"`.
 6. **Resilience** — reconnect banner, first-connect error, per-Chat Snapshot error with Retry, app error boundary.
-7. **Smoke e2e** — smoke spec for a full Turn (backend `webServer` and ports landed with slice 2, alongside its layout e2e tests).
+7. **Smoke e2e** — smoke spec for a full Turn (backend `webServer` and ports landed with slice 2, alongside its layout e2e tests). Play the Turn in a Chat other than `incident-triage`: `e2e/blocks.e2e.ts` advances that one on the shared backend.
 8. **Visual tests** — fake Socket.IO server, fixtures, `@visual` project and baselines.
 9. **Docs** — README sections; review ADRs and glossary.
