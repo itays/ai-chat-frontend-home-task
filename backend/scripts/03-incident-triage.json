@@ -1,0 +1,146 @@
+{
+  "id": "incident-triage",
+  "title": "Incident triage",
+  "history": [
+    {
+      "steps": [
+        {
+          "op": "markdown",
+          "text": "### P1 incident: checkout failures in Europe\n\nMonitoring detected that checkout requests in `eu-west-1` started failing at **08:42 UTC**."
+        },
+        {
+          "op": "tool_call",
+          "title": "Querying checkout error rate",
+          "durationMs": 1500,
+          "result": "succeeded",
+          "summary": "18.2% of requests failing (baseline 0.3%)"
+        }
+      ]
+    },
+    {
+      "steps": [
+        {
+          "op": "markdown",
+          "text": "Customers are already reporting it: I found **4 related tickets** from the last 30 minutes. Do you want to see them?"
+        }
+      ]
+    }
+  ],
+  "turns": [
+    {
+      "expect": "Yes, show me the related tickets.",
+      "steps": [
+        {
+          "op": "tool_call",
+          "title": "Searching customer tickets",
+          "durationMs": 1500,
+          "result": "succeeded",
+          "summary": "4 tickets found"
+        },
+        {
+          "op": "table",
+          "columns": [
+            { "key": "ticket", "label": "Ticket" },
+            { "key": "opened", "label": "Opened (UTC)" },
+            { "key": "customer", "label": "Customer" },
+            { "key": "summary", "label": "Summary" },
+            { "key": "priority", "label": "Priority" }
+          ],
+          "rows": [
+            {
+              "ticket": "INC0019876",
+              "opened": "08:44",
+              "customer": "Northwind Traders GmbH",
+              "summary": "Checkout page goes blank after clicking Pay, and the card was charged twice for the same order",
+              "priority": "P1"
+            },
+            {
+              "ticket": "INC0019879",
+              "opened": "08:47",
+              "customer": "Contoso Retail Europe",
+              "summary": "Orders stuck in 'payment pending' for every customer in France and Belgium",
+              "priority": "P1"
+            },
+            {
+              "ticket": "INC0019884",
+              "opened": "08:53",
+              "customer": "Fabrikam Outdoor",
+              "summary": "Timeout error at the final checkout step",
+              "priority": "P2"
+            },
+            {
+              "ticket": "INC0019890",
+              "opened": "09:01",
+              "customer": "Tailspin Toys",
+              "summary": "Tax amount shows as 0.00 and the order cannot be placed",
+              "priority": "P2"
+            }
+          ]
+        },
+        {
+          "op": "markdown",
+          "text": "The most detailed report is **INC0019876**. The customer wrote:\n\n> Checkout page shows nothing after I click Pay <img src=x onerror=\"alert('xss')\"> and my card was charged twice.\n\nAll four tickets point at the final payment step, and one mentions tax. That suggests the problem is in the payments service rather than the storefront."
+        }
+      ]
+    },
+    {
+      "expect": "What changed before the failures started?",
+      "steps": [
+        {
+          "op": "tool_call",
+          "title": "Checking recent deployments",
+          "durationMs": 2000,
+          "result": "succeeded",
+          "summary": "payments-service v4.18.0 deployed at 08:37 UTC"
+        },
+        {
+          "op": "raw_block",
+          "block": {
+            "type": "chart",
+            "title": "Checkout error rate, eu-west-1",
+            "unit": "%",
+            "points": [
+              { "time": "08:30", "value": 0.3 },
+              { "time": "08:35", "value": 0.3 },
+              { "time": "08:40", "value": 0.4 },
+              { "time": "08:45", "value": 17.9 },
+              { "time": "08:50", "value": 18.4 },
+              { "time": "08:55", "value": 18.2 }
+            ]
+          }
+        },
+        {
+          "op": "markdown",
+          "text": "**payments-service v4.18.0** finished deploying at 08:37 UTC, five minutes before the failures started. The new version can't reach the tax provider:\n\n```text\n2026-11-01T08:42:13Z ERROR payments-service TaxClient: request failed: ETIMEDOUT tax-api.eu.example.com:443\n2026-11-01T08:42:14Z ERROR payments-service CheckoutHandler: tax calculation failed, aborting payment capture\n2026-11-01T08:42:14Z WARN  payments-service PaymentCapture: retrying capture for order 7731942 (attempt 2)\n```\n\nRelease notes: https://deploy.example.com/services/payments-service/releases/v4.18.0/notes?region=eu-west-1&compare=v4.17.2&include=config-changes\n\nRolling back to **v4.17.2** is the fastest way to stop the failures. Should I start the rollback?"
+        }
+      ]
+    },
+    {
+      "expect": "Yes, roll back payments-service.",
+      "steps": [
+        {
+          "op": "tool_call",
+          "title": "Rolling back payments-service to v4.17.2",
+          "durationMs": 3500,
+          "result": "succeeded",
+          "summary": "Rollback complete in eu-west-1"
+        },
+        {
+          "op": "pause",
+          "durationMs": 1000
+        },
+        {
+          "op": "tool_call",
+          "title": "Verifying checkout error rate",
+          "durationMs": 2500,
+          "result": "succeeded",
+          "summary": "Error rate back to 0.4%"
+        },
+        {
+          "op": "markdown",
+          "text": "The rollback is complete, and the checkout error rate is back to **0.4%**.\n\nI updated the incident and the four related tickets, and posted a summary to **#incident-payments**. The duplicate charge on **INC0019876** still needs a refund from the payments team."
+        }
+      ]
+    }
+  ]
+}

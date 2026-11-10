@@ -1,0 +1,103 @@
+{
+  "id": "vpn-access",
+  "title": "VPN access issue",
+  "history": [
+    {
+      "steps": [
+        {
+          "op": "markdown",
+          "text": "Hi Dana, I noticed **three failed VPN sign-ins** from your laptop `LT-4471` in the last hour, so I took a look."
+        },
+        {
+          "op": "tool_call",
+          "title": "Checking VPN sign-in logs",
+          "durationMs": 1500,
+          "result": "succeeded",
+          "summary": "3 failed attempts: password expired"
+        }
+      ]
+    },
+    {
+      "steps": [
+        {
+          "op": "markdown",
+          "text": "Your network password expired yesterday, which is why the VPN rejects you. I can reset it and text a temporary password to the phone number on your profile.\n\nShould I go ahead?"
+        }
+      ]
+    }
+  ],
+  "turns": [
+    {
+      "expect": "Yes, please reset it.",
+      "steps": [
+        {
+          "op": "tool_call",
+          "title": "Resetting network password",
+          "durationMs": 2000,
+          "result": "succeeded",
+          "summary": "Temporary password sent to phone ending in 4821"
+        },
+        {
+          "op": "markdown",
+          "text": "Done. I sent a temporary password to your phone ending in **4821**.\n\nTo sign in:\n\n1. Open the **GlobalProtect** client.\n2. Sign in with the temporary password.\n3. Choose a new password when prompted.\n\nThe temporary password expires in **15 minutes**."
+        }
+      ]
+    },
+    {
+      "expect": "I signed in, but the VPN disconnects every few minutes.",
+      "steps": [
+        {
+          "op": "tool_call",
+          "title": "Checking VPN client version",
+          "durationMs": 1500,
+          "result": "succeeded",
+          "summary": "GlobalProtect 5.2.4 is outdated"
+        },
+        {
+          "op": "table",
+          "columns": [
+            { "key": "device", "label": "Device" },
+            { "key": "installed", "label": "Installed version" },
+            { "key": "required", "label": "Required version" },
+            { "key": "status", "label": "Status" }
+          ],
+          "rows": [
+            {
+              "device": "LT-4471",
+              "installed": "5.2.4",
+              "required": "6.1.0 or later",
+              "status": "Outdated"
+            }
+          ]
+        },
+        {
+          "op": "markdown",
+          "text": "Your VPN client is out of date. Versions before **6.1.0** drop the connection when the gateway rotates its session keys, which happens every few minutes.\n\nI can push the update to your laptop now. It takes about five minutes and restarts the VPN client once. Should I start the update?"
+        }
+      ]
+    },
+    {
+      "expect": "Go ahead and update it.",
+      "steps": [
+        {
+          "op": "tool_call",
+          "title": "Installing GlobalProtect 6.1.3 on LT-4471",
+          "durationMs": 3000,
+          "result": "succeeded",
+          "summary": "Update installed"
+        },
+        {
+          "op": "tool_call",
+          "title": "Creating incident record",
+          "durationMs": 1000,
+          "result": "succeeded",
+          "summary": "INC0012345 created and resolved"
+        },
+        {
+          "op": "markdown",
+          "text": "The update is installed. Reconnect to the VPN and the connection should stay up.\n\nI logged everything in **INC0012345** and marked it resolved. If the problem comes back, reopen that ticket and the network team will have the full history."
+        }
+      ]
+    }
+  ]
+}

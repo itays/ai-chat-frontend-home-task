@@ -1,0 +1,124 @@
+{
+  "id": "new-hire-setup",
+  "title": "New hire setup",
+  "history": [
+    {
+      "steps": [
+        {
+          "op": "markdown",
+          "text": "### New hire request received\n\n**Maya Cohen** joins the Sales team as an Account Executive on **Monday, November 9**."
+        },
+        {
+          "op": "table",
+          "columns": [
+            { "key": "item", "label": "Item" },
+            { "key": "details", "label": "Details" }
+          ],
+          "rows": [
+            { "item": "Manager", "details": "Avi Levi" },
+            { "item": "Location", "details": "Tel Aviv office" },
+            { "item": "Laptop", "details": "MacBook Pro 14-inch" },
+            { "item": "Apps", "details": "Google Workspace, Slack, Salesforce, Zoom" }
+          ]
+        }
+      ]
+    },
+    {
+      "steps": [
+        {
+          "op": "markdown",
+          "text": "I can order the laptop and create Maya's accounts now, so everything is ready on her first day. Should I go ahead?"
+        }
+      ]
+    }
+  ],
+  "turns": [
+    {
+      "expect": "Yes, go ahead.",
+      "steps": [
+        {
+          "op": "tool_call",
+          "title": "Ordering MacBook Pro 14-inch",
+          "durationMs": 2000,
+          "result": "succeeded",
+          "summary": "Order PO-88213, arrives Thursday"
+        },
+        {
+          "op": "tool_call",
+          "title": "Creating Google Workspace account",
+          "durationMs": 1500,
+          "result": "succeeded",
+          "summary": "maya.cohen@acme.example"
+        },
+        {
+          "op": "tool_call",
+          "title": "Adding Maya to Slack",
+          "durationMs": 1000,
+          "result": "succeeded",
+          "summary": "Joined #sales and #general"
+        },
+        {
+          "op": "tool_call",
+          "title": "Granting Salesforce access",
+          "durationMs": 2000,
+          "result": "failed",
+          "summary": "Sales Cloud licenses require manager approval"
+        },
+        {
+          "op": "markdown",
+          "text": "Most of the setup is done: the laptop is ordered, and Maya has Google Workspace and Slack accounts.\n\nI couldn't grant **Salesforce** access, because Sales Cloud licenses are paid and need her manager's approval. Should I send Avi an approval request?"
+        }
+      ]
+    },
+    {
+      "expect": "Yes, send Avi an approval request.",
+      "steps": [
+        {
+          "op": "tool_call",
+          "title": "Sending approval request to Avi Levi",
+          "durationMs": 1500,
+          "result": "succeeded",
+          "summary": "Request sent by email and Slack"
+        },
+        {
+          "op": "raw_block",
+          "block": {
+            "type": "approval_request",
+            "title": "Salesforce Sales Cloud license for Maya Cohen",
+            "approver": "Avi Levi",
+            "status": "pending",
+            "actions": ["approve", "reject"]
+          }
+        },
+        {
+          "op": "markdown",
+          "text": "I sent the request to Avi. As soon as he approves, I'll grant Maya's Salesforce access automatically."
+        }
+      ]
+    },
+    {
+      "expect": "Thanks. What's left before Monday?",
+      "steps": [
+        {
+          "op": "table",
+          "columns": [
+            { "key": "task", "label": "Task" },
+            { "key": "owner", "label": "Owner" },
+            { "key": "status", "label": "Status" }
+          ],
+          "rows": [
+            { "task": "Laptop delivery", "owner": "IT", "status": "Arrives Thursday" },
+            { "task": "Google Workspace account", "owner": "IT", "status": "Done" },
+            { "task": "Slack account", "owner": "IT", "status": "Done" },
+            { "task": "Salesforce access", "owner": "Avi Levi", "status": "Waiting for approval" },
+            { "task": "Badge and desk", "owner": "Facilities", "status": "Not started" }
+          ]
+        },
+        {
+          "op": "markdown",
+          "text": "Two things are left:\n\n- **Salesforce access**, waiting for Avi's approval.\n- **Badge and desk**, which Facilities hasn't started yet. I sent them a reminder with Maya's start date.\n\nI'll keep tracking both and update you on Friday."
+        }
+      ]
+    }
+  ]
+}
