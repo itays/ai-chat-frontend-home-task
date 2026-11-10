@@ -12,23 +12,31 @@ import { ghostText } from "./suggestion.ts";
 /** The backend rejects longer Messages with INVALID_REQUEST. */
 const MAX_MESSAGE_LENGTH = 2000;
 
-const selectComposerChat =
+const selectComposer =
   (chatId: string) =>
   ({ chats, connection }: ChatStoreState) => {
-    const chat = chats[chatId]?.chat;
+    const entry = chats[chatId];
     return {
-      connected: connection === "connected",
-      status: chat?.status,
-      suggestion: chat?.suggestion ?? null,
+      blockedReason: blockedReasonFor(
+        connection === "connected",
+        entry?.sync === "failed",
+        entry?.chat?.status
+      ),
+      suggestion: entry?.chat?.suggestion ?? null,
     };
   };
 
 const blockedReasonFor = (
   connected: boolean,
+  stale: boolean,
   status: ChatStatus | undefined
 ): string | null => {
   if (!connected) {
     return "Wait for the connection to come back";
+  }
+  if (stale) {
+    // Its events are no longer applied, so a sent Message would never show.
+    return "Reload this chat before sending";
   }
   return status === "responding" ? "Wait for the assistant to finish" : null;
 };
@@ -45,8 +53,8 @@ export const Composer = ({
   chatId: string;
   composer: ComposerStore;
 }) => {
-  const { connected, status, suggestion } = useChatState(
-    useShallow(selectComposerChat(chatId))
+  const { blockedReason, suggestion } = useChatState(
+    useShallow(selectComposer(chatId))
   );
   const { draft, sending, error } = useComposerEntry(composer, chatId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -55,7 +63,6 @@ export const Composer = ({
   const blockedReasonId = useId();
 
   const ghost = ghostText(draft, suggestion);
-  const blockedReason = blockedReasonFor(connected, status);
   const canSend = draft.trim() !== "" && !sending && blockedReason === null;
 
   const send = () => {

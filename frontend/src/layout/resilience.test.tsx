@@ -78,9 +78,51 @@ describe("a Chat whose Snapshot failed to load", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "This chat may be out of date"
     );
-    expect(screen.getByRole("textbox", { name: "Message" })).toBeVisible();
+    // Its events are no longer applied, so a sent Message would never show.
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Message" }),
+      "Hi"
+    );
+    const send = screen.getByRole("button", { name: "Send message" });
+    expect(send).toBeDisabled();
+    expect(send).toHaveAccessibleDescription("Reload this chat before sending");
+
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(sync.retryChat).toHaveBeenCalledWith("c1");
+  });
+});
+
+describe("chat list that fails to load after a reconnect", () => {
+  it("keeps the Chats and drafts on screen and offers to reload the list", async () => {
+    const { store, sync } = renderApp({
+      url: "/?chat=c1",
+      chats: { c1: entry("c1") },
+    });
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Message" }),
+      "Draft"
+    );
+
+    act(() => store.setState({ connection: "unavailable" }));
+
+    expect(screen.getByText("Couldn't refresh your chats")).toHaveRole(
+      "status"
+    );
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue(
+      "Draft"
+    );
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(sync.retry).toHaveBeenCalledOnce();
+  });
+
+  it("shows the server error, not an empty app, while reconnecting before any Chat was listed", () => {
+    renderApp({ chats: {}, connection: "reconnecting" });
+
+    expect(
+      screen.getByRole("heading", { name: "Can't reach the server" })
+    ).toBeVisible();
   });
 });
 

@@ -8,8 +8,13 @@ import { useSelectedChatId } from "./layout/selectedChat.ts";
 
 export const App = () => {
   const selectedChatId = useSelectedChatId();
-  const connection = useChatState((state) => state.connection);
-  if (connection === "unavailable") {
+  // Once Chats are listed they stay on screen and the banner reports trouble.
+  const serverOutOfReach = useChatState(
+    ({ connection, chatOrder }) =>
+      chatOrder.length === 0 &&
+      (connection === "unavailable" || connection === "reconnecting")
+  );
+  if (serverOutOfReach) {
     return <ServerUnavailable />;
   }
   return (
