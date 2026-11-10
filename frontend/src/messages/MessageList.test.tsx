@@ -206,6 +206,37 @@ describe("messages", () => {
     expect(log.getByText("Still here")).toBeInTheDocument();
   });
 
+  it("retries a failed Block when an update replaces it", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { log, store } = renderChatWithStore(
+      assistant({ id: "b1", type: { name: "chart" } as unknown as string })
+    );
+    expect(
+      log.getByText("This content couldn't be displayed.")
+    ).toBeInTheDocument();
+
+    act(() =>
+      store.setState(({ chats }) => ({
+        chats: {
+          c1: {
+            ...chats.c1!,
+            chat: {
+              ...chats.c1!.chat!,
+              messages: [
+                assistant({ id: "b1", type: "markdown", text: "Recovered" }),
+              ],
+            },
+          },
+        },
+      }))
+    );
+
+    expect(log.getByText("Recovered")).toBeInTheDocument();
+    expect(
+      log.queryByText("This content couldn't be displayed.")
+    ).not.toBeInTheDocument();
+  });
+
   it("follows Block updates and new Messages as they arrive", () => {
     const toolCall = {
       id: "b1",

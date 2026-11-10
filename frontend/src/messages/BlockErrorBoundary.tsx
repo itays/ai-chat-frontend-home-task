@@ -7,18 +7,20 @@ type Props = {
   children: ReactNode;
 };
 
-/** Keeps one Block's render failure from taking down its Message or the Chat. */
-export class BlockErrorBoundary extends Component<Props, { failed: boolean }> {
-  state = { failed: false };
+type State = { failed: boolean; resetKey: unknown };
 
-  static getDerivedStateFromError() {
+/** Keeps one Block's render failure from taking down its Message or the Chat. */
+export class BlockErrorBoundary extends Component<Props, State> {
+  state: State = { failed: false, resetKey: this.props.resetKey };
+
+  static getDerivedStateFromError(): Partial<State> {
     return { failed: true };
   }
 
-  componentDidUpdate(previous: Props) {
-    if (this.state.failed && previous.resetKey !== this.props.resetKey) {
-      this.setState({ failed: false });
-    }
+  static getDerivedStateFromProps(props: Props, state: State): State | null {
+    return props.resetKey === state.resetKey
+      ? null
+      : { failed: false, resetKey: props.resetKey };
   }
 
   render() {
