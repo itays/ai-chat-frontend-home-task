@@ -1,10 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
+import { BACKEND_PORT, BACKEND_URL as backendURL } from "./e2e/backend.ts";
 
 // E2E runs its own backend and frontend on dedicated ports so it never
 // touches the `npm start` servers (4000 / 5173) or their in-memory state.
-const BACKEND_PORT = 4100;
 const FRONTEND_PORT = 5174;
-const backendURL = `http://127.0.0.1:${BACKEND_PORT}`;
 const baseURL = `http://127.0.0.1:${FRONTEND_PORT}`;
 const isCI = !!process.env.CI;
 

@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useChatState } from "@/chat/ChatClientContext.tsx";
 import { latestSummary, type ChatStoreState } from "@/chat/store.ts";
+import { MessageList } from "@/messages/MessageList.tsx";
 
 type PaneView = "none" | "not-found" | "loading" | "ready";
 
@@ -63,6 +64,7 @@ export const ChatPane = ({ chatId }: { chatId: string | null }) => {
         />
       )}
       {view === "loading" && <ChatSkeleton />}
+      {view === "ready" && chatId !== null && <MessageList chatId={chatId} />}
     </>
   );
 };

@@ -1,18 +1,9 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { App } from "./App.tsx";
-import {
-  ChatClientProvider,
-  type ChatClient,
-} from "./chat/ChatClientContext.tsx";
 import type { Chat, ChatSummary, Message } from "./chat/protocol.ts";
-import {
-  createChatStore,
-  type ChatEntry,
-  type ChatStore,
-} from "./chat/store.ts";
+import type { ChatEntry, ChatStore } from "./chat/store.ts";
+import { renderApp as renderWithChats } from "./test/renderApp.tsx";
 
 /** Appends a completed assistant Message, as the sync layer would after a Turn. */
 const completeReply = (store: ChatStore, chatId: string) =>
@@ -91,27 +82,8 @@ const loadedEntries = (): Record<string, ChatEntry> =>
 const renderApp = ({
   url = "/",
   chats = loadedEntries(),
-}: { url?: string; chats?: Record<string, ChatEntry> } = {}) => {
-  window.history.replaceState(null, "", url);
-  const store = createChatStore();
-  store.setState({
-    connection: "connected",
-    chatOrder: Object.keys(chats),
-    chats,
-  });
-  const client: ChatClient = {
-    store,
-    sync: { retry: vi.fn(), retryChat: vi.fn(), sendMessage: vi.fn() },
-  };
-  render(
-    <ChatClientProvider client={client}>
-      <TooltipProvider>
-        <App />
-      </TooltipProvider>
-    </ChatClientProvider>
-  );
-  return { store };
-};
+}: { url?: string; chats?: Record<string, ChatEntry> } = {}) =>
+  renderWithChats({ url, chats });
 
 const chatButton = (title: string) =>
   chatList().getByRole("button", { name: new RegExp(title) });

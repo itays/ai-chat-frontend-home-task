@@ -8,7 +8,8 @@ export const App = () => {
   return (
     <SidebarProvider>
       <ChatSidebar selectedChatId={selectedChatId} />
-      <SidebarInset>
+      {/* Fixed to the viewport so the message list scrolls, not the page. */}
+      <SidebarInset className="h-svh">
         <ChatPane chatId={selectedChatId} />
       </SidebarInset>
     </SidebarProvider>
