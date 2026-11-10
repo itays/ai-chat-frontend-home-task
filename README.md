@@ -34,6 +34,16 @@ npm run test -w frontend        # run once
 npm run test:watch -w frontend  # watch mode
 ```
 
+End-to-end tests use Playwright (Chromium) and live in `frontend/e2e/*.e2e.ts`. Playwright starts the dev server on `http://127.0.0.1:5173`, or reuses one that is already running.
+
+```bash
+npx -w frontend playwright install chromium  # once, downloads the browser
+npm run test:e2e -w frontend         # full suite
+npm run test:e2e:smoke -w frontend   # @smoke-tagged tests only (what CI runs)
+npm run test:e2e:headed -w frontend  # watch the browser
+npm run test:e2e:ui -w frontend      # Playwright UI mode
+```
+
 ## Configuration
 
 | Variable | Where | Default | Purpose |
