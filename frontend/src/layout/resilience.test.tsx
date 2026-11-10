@@ -118,7 +118,7 @@ describe("chat list that fails to load after a reconnect", () => {
   });
 
   it("shows the server error, not an empty app, while reconnecting before any Chat was listed", () => {
-    renderApp({ chats: {}, connection: "reconnecting" });
+    renderApp({ chats: {}, listed: false, connection: "reconnecting" });
 
     expect(
       screen.getByRole("heading", { name: "Can't reach the server" })
@@ -128,7 +128,11 @@ describe("chat list that fails to load after a reconnect", () => {
 
 describe("unavailable server", () => {
   it("replaces the app with an error and retries on request, showing progress until the attempt settles", async () => {
-    const { sync } = renderApp({ chats: {}, connection: "unavailable" });
+    const { sync } = renderApp({
+      chats: {},
+      listed: false,
+      connection: "unavailable",
+    });
     let settle = () => {};
     sync.retry.mockReturnValueOnce(
       new Promise<void>((resolve) => {

@@ -112,6 +112,7 @@ export const createChatSync = ({
     }
     store.setState(({ chats }) => ({
       connection: "connected",
+      listed: true,
       chatOrder: ack.chats.map(({ id }) => id),
       chats: Object.fromEntries(
         ack.chats.map((summary: ChatSummary) => [

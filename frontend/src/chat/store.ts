@@ -6,6 +6,8 @@ import type { Chat, ChatSummary } from "./protocol.ts";
  * - `unavailable`: the first connection attempt failed (the socket keeps
  *   retrying), or the chat list could not be loaded.
  * - `reconnecting`: was connected and lost the connection.
+ *
+ * What the user is told depends on `listed` as well; see `selectConnectionView`.
  */
 export type ConnectionStatus =
   "connecting" | "connected" | "reconnecting" | "unavailable";
@@ -20,6 +22,11 @@ export type ChatEntry = {
 
 export type ChatStoreState = {
   connection: ConnectionStatus;
+  /**
+   * True once a chat list has arrived. Never reset: a later reconnect replaces
+   * the Chats, so the ones listed stay on screen until then.
+   */
+  listed: boolean;
   chatOrder: string[];
   chats: Record<string, ChatEntry>;
 };
@@ -27,6 +34,7 @@ export type ChatStoreState = {
 export const createChatStore = () =>
   createStore<ChatStoreState>()(() => ({
     connection: "connecting",
+    listed: false,
     chatOrder: [],
     chats: {},
   }));

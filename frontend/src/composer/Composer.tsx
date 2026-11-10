@@ -1,45 +1,13 @@
 import { ArrowUpIcon } from "lucide-react";
 import { useId, useRef, type KeyboardEvent } from "react";
-import { useShallow } from "zustand/shallow";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
-import { useChatState } from "@/chat/ChatClientContext.tsx";
-import type { ChatStatus } from "@/chat/protocol.ts";
-import type { ChatStoreState } from "@/chat/store.ts";
+import type { SendAvailability } from "@/chat/chatView.ts";
 import { useComposerEntry, type ComposerStore } from "./composerStore.ts";
 import { ghostText } from "./suggestion.ts";
 
 /** The backend rejects longer Messages with INVALID_REQUEST. */
 const MAX_MESSAGE_LENGTH = 2000;
-
-const selectComposer =
-  (chatId: string) =>
-  ({ chats, connection }: ChatStoreState) => {
-    const entry = chats[chatId];
-    return {
-      blockedReason: blockedReasonFor(
-        connection === "connected",
-        entry?.sync === "failed",
-        entry?.chat?.status
-      ),
-      suggestion: entry?.chat?.suggestion ?? null,
-    };
-  };
-
-const blockedReasonFor = (
-  connected: boolean,
-  stale: boolean,
-  status: ChatStatus | undefined
-): string | null => {
-  if (!connected) {
-    return "Wait for the connection to come back";
-  }
-  if (stale) {
-    // Its events are no longer applied, so a sent Message would never show.
-    return "Reload this chat before sending";
-  }
-  return status === "responding" ? "Wait for the assistant to finish" : null;
-};
 
 /** Shared by the textarea and its ghost-text mirror, so both wrap identically. */
 const FIELD_TEXT =
@@ -49,13 +17,14 @@ const FIELD_TEXT =
 export const Composer = ({
   chatId,
   composer,
+  suggestion,
+  send: availability,
 }: {
   chatId: string;
   composer: ComposerStore;
+  suggestion: string | null;
+  send: SendAvailability;
 }) => {
-  const { blockedReason, suggestion } = useChatState(
-    useShallow(selectComposer(chatId))
-  );
   const { draft, sending, error } = useComposerEntry(composer, chatId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hintId = useId();
@@ -63,7 +32,8 @@ export const Composer = ({
   const blockedReasonId = useId();
 
   const ghost = ghostText(draft, suggestion);
-  const canSend = draft.trim() !== "" && !sending && blockedReason === null;
+  const blockedReason = availability.ok ? null : availability.reason;
+  const canSend = draft.trim() !== "" && !sending && availability.ok;
 
   const send = () => {
     if (canSend) {

@@ -157,6 +157,70 @@ describe("initial sync", () => {
   });
 });
 
+describe("listed", () => {
+  it("is false until the first chat list arrives", async () => {
+    const { fake, store } = setup();
+    expect(store.getState().listed).toBe(false);
+
+    fake.signal({ type: "connect" });
+    expect(store.getState().listed).toBe(false);
+
+    await fake.answer("chats:list", undefined, {
+      ok: true,
+      chats: [summary("a")],
+    });
+    expect(store.getState().listed).toBe(true);
+  });
+
+  it("stays false when the first chat list fails, or the connection drops before it", async () => {
+    const { fake, store } = setup();
+    fake.signal({ type: "connect_error" });
+    fake.signal({ type: "connect" });
+    await fake.fail("chats:list", undefined, new Error("timed out"));
+    expect(store.getState().listed).toBe(false);
+
+    fake.signal({ type: "connect" });
+    fake.signal({ type: "disconnect" });
+    fake.signal({ type: "connect_error" });
+    expect(store.getState().listed).toBe(false);
+  });
+
+  it("stays true, with the Chats, through a lost connection and a failed relist", async () => {
+    const { fake, store } = setup();
+    await connectWith(fake, [snapshot("a")]);
+
+    fake.signal({ type: "disconnect" });
+    fake.signal({ type: "connect_error" });
+    expect(store.getState()).toMatchObject({
+      connection: "reconnecting",
+      listed: true,
+      chatOrder: ["a"],
+    });
+
+    fake.signal({ type: "connect" });
+    await fake.fail("chats:list", undefined, new Error("timed out"));
+    expect(store.getState()).toMatchObject({
+      connection: "unavailable",
+      listed: true,
+      chatOrder: ["a"],
+    });
+  });
+
+  it("stays true when a restarted backend lists different Chats", async () => {
+    const { fake, store } = setup();
+    await connectWith(fake, [snapshot("a")]);
+    fake.signal({ type: "disconnect" });
+
+    await connectWith(fake, [snapshot("b", { seq: 0 })]);
+
+    expect(store.getState()).toMatchObject({
+      connection: "connected",
+      listed: true,
+      chatOrder: ["b"],
+    });
+  });
+});
+
 const suggestionEvent = (
   chatId: string,
   seq: number,
