@@ -50,7 +50,8 @@ test("shows a banner and holds sending while the connection is down, then recove
     .then((ws) =>
       ws.waitForEvent("framesent", ({ payload }) => payload === "5")
     );
-  await page.goto("/?chat=vpn-access");
+  // No spec plays a Turn here, so the Chat stays idle and Send can come back.
+  await page.goto("/?chat=new-hire-setup");
   const message = page.getByRole("textbox", { name: "Message" });
   const send = page.getByRole("button", { name: "Send message" });
   await expect(message).toBeVisible();
