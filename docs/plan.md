@@ -53,8 +53,8 @@ Outcome of the design grilling. Vocabulary follows [`GLOSSARY.md`](../GLOSSARY.m
 2. **Layout** — sidebar with statuses and unread, URL selection, empty state, not-found, skeleton.
 3. **Blocks** — markdown, Tool Call, table, Unknown Block with validation and per-block error boundary; user Message rendering.
 4. **Input** — textarea, ghost-text Suggestion, Tab, send/ack flow, Rejected Message and other errors, per-Chat drafts.
-5. **Status and scroll** — typing indicator, streaming caret, finished footer, `message-scroller`, live region. `message-scroller` replaces the interim scroll container in `MessageList.tsx` and takes over its `role="log"` with `aria-live="off"`.
+5. **Status and scroll** — typing indicator, streaming caret, finished footer, `message-scroller`, live region. `message-scroller` replaces the interim scroll container in `MessageList.tsx` and takes over its `role="log"` with `aria-live="off"`. The Composer's error line (`src/composer/Composer.tsx`) is already a polite live region that announces Rejected Message and send errors; the new live region must not announce them again.
 6. **Resilience** — reconnect banner, first-connect error, per-Chat Snapshot error with Retry, app error boundary.
-7. **Smoke e2e** — smoke spec for a full Turn (backend `webServer` and ports landed with slice 2, alongside its layout e2e tests). Play the Turn in a Chat other than `incident-triage`: `e2e/blocks.e2e.ts` advances that one on the shared backend.
+7. **Smoke e2e** — smoke spec for a full Turn (backend `webServer` and ports landed with slice 2, alongside its layout e2e tests). Play the Turn in a Chat other than `incident-triage`: `e2e/blocks.e2e.ts` advances that one on the shared backend, and `e2e/composer.e2e.ts` needs `new-hire-setup` idle with a Suggestion, so use `vpn-access`.
 8. **Visual tests** — fake Socket.IO server, fixtures, `@visual` project and baselines.
 9. **Docs** — README sections; review ADRs and glossary.
