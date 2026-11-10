@@ -25,6 +25,15 @@ npm start
 
 `npm test` runs the tests of every workspace that defines a `test` script.
 
+## Testing
+
+The frontend uses Vitest with React Testing Library (jsdom). Put test files next to the code they cover as `src/**/*.test.ts(x)`.
+
+```bash
+npm run test -w frontend        # run once
+npm run test:watch -w frontend  # watch mode
+```
+
 ## Configuration
 
 | Variable | Where | Default | Purpose |
