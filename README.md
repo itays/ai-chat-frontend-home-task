@@ -185,7 +185,7 @@ Commits made by the agent carry a `Co-Authored-By: Claude` trailer.
 - **Visual tests in CI.** Baselines are macOS-only; generating and running them in the official Playwright Docker image would let CI run them ([ADR-0002](docs/adr/0002-fake-socket-server-for-visual-tests.md)).
 - **Persisted drafts and unread state.** Both live in memory, so a refresh clears drafts and marks every Chat as read.
 - **Unterminated markdown while streaming.** Accepted one-word flicker; Streamdown or a small pre-pass that closes open markers would fix it.
-- **Bundle size.** The whole shadcn registry and its dependencies are installed, and the production build warns about a JavaScript chunk over 500 kB. Removing unused components and dependencies, or code-splitting, would shrink it.
+- **Bundle size.** The production build warns about a 643 kB JavaScript chunk (204 kB gzipped), over Vite's 500 kB threshold. Unused shadcn components are already removed; what remains is code the app runs: `react-dom` (about a third), the markdown pipeline (about 100 kB), Base UI under the shadcn components, and Socket.IO. Lazy-loading the markdown renderer, or splitting vendor code into its own cacheable chunk, would bring the main chunk under the threshold.
 - **Long Chats.** The message list is not virtualised. The scripted Chats are short, so it was not needed.
 - **E2E isolation.** The e2e specs share one backend and coordinate which Chat each one advances. A backend per spec, or a reset hook, would remove that coupling, but the backend must not be modified.
 - **Error detail.** Send failures other than a Rejected Message (timeout, disconnect, other protocol errors) share one generic message.
