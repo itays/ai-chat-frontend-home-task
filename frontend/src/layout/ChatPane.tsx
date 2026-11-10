@@ -1,5 +1,5 @@
 import { MessageSquareIcon, SearchXIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useShallow } from "zustand/shallow";
 import {
   Empty,
@@ -11,8 +11,10 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { useChatState } from "@/chat/ChatClientContext.tsx";
+import { useChatActions, useChatState } from "@/chat/ChatClientContext.tsx";
 import { latestSummary, type ChatStoreState } from "@/chat/store.ts";
+import { Composer } from "@/composer/Composer.tsx";
+import { createComposerStore } from "@/composer/composerStore.ts";
 import { MessageList } from "@/messages/MessageList.tsx";
 
 type PaneView = "none" | "not-found" | "loading" | "ready";
@@ -41,6 +43,9 @@ const selectPane =
 /** The main area: the selected Chat, or a placeholder explaining why none is shown. */
 export const ChatPane = ({ chatId }: { chatId: string | null }) => {
   const { view, title } = useChatState(useShallow(selectPane(chatId)));
+  const { sendMessage } = useChatActions();
+  // Owned here, above the per-Chat Composer, so drafts and sends survive switching Chats.
+  const [composer] = useState(() => createComposerStore(sendMessage));
 
   return (
     <>
@@ -64,7 +69,12 @@ export const ChatPane = ({ chatId }: { chatId: string | null }) => {
         />
       )}
       {view === "loading" && <ChatSkeleton />}
-      {view === "ready" && chatId !== null && <MessageList chatId={chatId} />}
+      {view === "ready" && chatId !== null && (
+        <>
+          <MessageList chatId={chatId} />
+          <Composer chatId={chatId} composer={composer} />
+        </>
+      )}
     </>
   );
 };

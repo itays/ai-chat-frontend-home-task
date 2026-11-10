@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { io, type Socket } from "socket.io-client";
-import type { Ack, Chat } from "../src/chat/protocol.ts";
-import { BACKEND_URL } from "./backend.ts";
+import type { Ack } from "../src/chat/protocol.ts";
+import { BACKEND_URL, getChat as getChatFrom } from "./backend.ts";
 
 const messages = (page: Page) => page.getByRole("log", { name: "Messages" });
 
@@ -50,13 +50,7 @@ test.describe("Blocks streamed in Turns", () => {
 
   let socket: Socket;
 
-  const getChat = async (): Promise<Chat> => {
-    const ack: Ack<{ chat: Chat }> = await socket.emitWithAck("chat:get", {
-      chatId: CHAT_ID,
-    });
-    if (!ack.ok) throw new Error(ack.error.message);
-    return ack.chat;
-  };
+  const getChat = () => getChatFrom(socket, CHAT_ID);
 
   const waitUntilIdle = () =>
     expect

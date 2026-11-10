@@ -23,10 +23,12 @@ export const renderApp = ({
     chatOrder: Object.keys(chats),
     chats,
   });
-  const client: ChatClient = {
-    store,
-    sync: { retry: vi.fn(), retryChat: vi.fn(), sendMessage: vi.fn() },
+  const sync = {
+    retry: vi.fn<ChatClient["sync"]["retry"]>(),
+    retryChat: vi.fn<ChatClient["sync"]["retryChat"]>(),
+    sendMessage: vi.fn<ChatClient["sync"]["sendMessage"]>(),
   };
+  const client: ChatClient = { store, sync };
   render(
     <ChatClientProvider client={client}>
       <TooltipProvider>
@@ -34,5 +36,5 @@ export const renderApp = ({
       </TooltipProvider>
     </ChatClientProvider>
   );
-  return { store };
+  return { store, sync };
 };
