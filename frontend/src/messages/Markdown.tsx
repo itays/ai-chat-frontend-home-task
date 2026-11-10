@@ -5,8 +5,10 @@ import remarkGfm from "remark-gfm";
 const remarkPlugins = [remarkGfm];
 
 const components: Components = {
-  a: ({ node: _node, ...props }) => (
-    <a {...props} target="_blank" rel="noopener noreferrer" />
+  a: ({ node: _node, children, ...props }) => (
+    <a {...props} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
   ),
 };
 

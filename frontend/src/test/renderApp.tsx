@@ -25,7 +25,11 @@ export const renderApp = ({
   });
   const client: ChatClient = {
     store,
-    sync: { retry: vi.fn(), retryChat: vi.fn(), sendMessage: vi.fn() },
+    sync: {
+      retry: vi.fn<ChatClient["sync"]["retry"]>(),
+      retryChat: vi.fn<ChatClient["sync"]["retryChat"]>(),
+      sendMessage: vi.fn<ChatClient["sync"]["sendMessage"]>(),
+    },
   };
   render(
     <ChatClientProvider client={client}>
