@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { io, type Socket } from "socket.io-client";
-import { BACKEND_URL, getChat } from "./backend.ts";
+import {
+  connectToBackend,
+  getChat,
+  type BackendConnection,
+} from "./backend.ts";
 
 // The only spec that plays Turns in this Chat; the others only read it, at any Turn.
 const CHAT_ID = "vpn-access";
@@ -15,14 +18,14 @@ const REPLY_ENDINGS: Record<string, string> = {
 };
 
 const pageErrors: Error[] = [];
-let socket: Socket;
+let backend: BackendConnection;
 
-test.beforeAll(() => {
-  socket = io(BACKEND_URL, { transports: ["websocket"] });
+test.beforeAll(async () => {
+  backend = await connectToBackend();
 });
 
 test.afterAll(() => {
-  socket.close();
+  backend.close();
 });
 
 test.beforeEach(({ page }) => {
@@ -39,11 +42,11 @@ test("sends the Suggestion, shows the reply, and restores the Chat on reload @sm
 }) => {
   // A retry can start while the failed attempt's Turn is still playing.
   await expect
-    .poll(async () => (await getChat(socket, CHAT_ID)).status, {
+    .poll(async () => (await getChat(backend, CHAT_ID)).status, {
       timeout: 15_000,
     })
     .not.toBe("responding");
-  const { suggestion, status } = await getChat(socket, CHAT_ID);
+  const { suggestion, status } = await getChat(backend, CHAT_ID);
   if (suggestion === null || !Object.hasOwn(REPLY_ENDINGS, suggestion)) {
     throw new Error(
       `${CHAT_ID} has no scripted Turn left (status ${status}, Suggestion ${JSON.stringify(suggestion)}); restart the E2E backend`
@@ -61,7 +64,7 @@ test("sends the Suggestion, shows the reply, and restores the Chat on reload @sm
   await expect(page.getByText("Assistant finished responding")).toBeAttached();
   await expect(log.getByText(suggestion, { exact: true })).toBeVisible();
   await expect(log.getByText(replyEnding)).toBeVisible();
-  const { suggestion: next } = await getChat(socket, CHAT_ID);
+  const { suggestion: next } = await getChat(backend, CHAT_ID);
   // The next Suggestion as ghost text, or the footer once the script is done.
   const nextSuggestionOrFinished =
     next === null

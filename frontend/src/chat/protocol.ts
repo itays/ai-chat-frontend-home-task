@@ -55,6 +55,13 @@ export type RequestMap = {
 
 export type RequestName = keyof RequestMap;
 
+/** What the client sends on `/ws`; the server answers with an ack of the same `id`. */
+export type RequestFrame = {
+  id: number;
+  name: RequestName;
+  payload?: unknown;
+};
+
 type ServerEventPayloads = {
   "chat:status": { status: ChatStatus; updatedAt: string };
   "chat:suggestion": { suggestion: string | null };
@@ -77,7 +84,7 @@ export const SERVER_EVENT_NAMES = [
   "message:completed",
 ] as const satisfies readonly ServerEventName[];
 
-/** A server event tagged with the Socket.IO event name it arrived on. */
+/** A server event tagged with the event name it arrived under. */
 export type ServerEvent = {
   [N in ServerEventName]: {
     name: N;
@@ -85,3 +92,14 @@ export type ServerEvent = {
     seq: number;
   } & ServerEventPayloads[N];
 }[ServerEventName];
+
+/** What the server sends on `/ws`. */
+export type ServerFrame =
+  | { type: "ack"; id: number; ack: Ack<Record<string, unknown>> }
+  | {
+      [N in ServerEventName]: {
+        type: "event";
+        name: N;
+        event: { chatId: string; seq: number } & ServerEventPayloads[N];
+      };
+    }[ServerEventName];

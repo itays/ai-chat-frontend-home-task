@@ -1,19 +1,22 @@
 import { expect, test } from "@playwright/test";
-import { io, type Socket } from "socket.io-client";
-import { BACKEND_URL, getChat } from "./backend.ts";
+import {
+  connectToBackend,
+  getChat,
+  type BackendConnection,
+} from "./backend.ts";
 
 // Nothing here is accepted by the script, so the Chat is left as it was.
 const CHAT_ID = "new-hire-setup";
 
 const pageErrors: Error[] = [];
-let socket: Socket;
+let backend: BackendConnection;
 
-test.beforeAll(() => {
-  socket = io(BACKEND_URL, { transports: ["websocket"] });
+test.beforeAll(async () => {
+  backend = await connectToBackend();
 });
 
 test.afterAll(() => {
-  socket.close();
+  backend.close();
 });
 
 test.beforeEach(({ page }) => {
@@ -28,7 +31,7 @@ test.afterEach(() => {
 test("completes the Suggestion with Tab and keeps a Rejected Message with an error", async ({
   page,
 }) => {
-  const { suggestion, status } = await getChat(socket, CHAT_ID);
+  const { suggestion, status } = await getChat(backend, CHAT_ID);
   if (suggestion === null) {
     throw new Error(`${CHAT_ID} has no Suggestion (status ${status})`);
   }

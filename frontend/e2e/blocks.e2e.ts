@@ -1,7 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { io, type Socket } from "socket.io-client";
-import type { Ack } from "../src/chat/protocol.ts";
-import { BACKEND_URL, getChat as getChatFrom } from "./backend.ts";
+import {
+  connectToBackend,
+  getChat as getChatFrom,
+  type BackendConnection,
+} from "./backend.ts";
 
 const messages = (page: Page) => page.getByRole("log", { name: "Messages" });
 
@@ -48,21 +50,21 @@ test.describe("Blocks streamed in Turns", () => {
     "What changed before the failures started?",
   ];
 
-  let socket: Socket;
+  let backend: BackendConnection;
 
-  const getChat = () => getChatFrom(socket, CHAT_ID);
+  const getChat = () => getChatFrom(backend, CHAT_ID);
 
   const waitUntilIdle = () =>
     expect
       .poll(async () => (await getChat()).status, { timeout: 15_000 })
       .toBe("idle");
 
-  test.beforeAll(() => {
-    socket = io(BACKEND_URL, { transports: ["websocket"] });
+  test.beforeAll(async () => {
+    backend = await connectToBackend();
   });
 
   test.afterAll(() => {
-    socket.close();
+    backend.close();
   });
 
   test.beforeEach(async ({ page }) => {
@@ -83,10 +85,10 @@ test.describe("Blocks streamed in Turns", () => {
     for (const text of TURNS) {
       await waitUntilIdle();
       if ((await getChat()).suggestion !== text) continue;
-      const ack: Ack<{ messageId: string }> = await socket.emitWithAck(
-        "message:send",
-        { chatId: CHAT_ID, text }
-      );
+      const ack = await backend.request("message:send", {
+        chatId: CHAT_ID,
+        text,
+      });
       expect(ack).toMatchObject({ ok: true });
     }
     await waitUntilIdle();

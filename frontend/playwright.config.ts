@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 import { BACKEND_PORT, BACKEND_URL as backendURL } from "./e2e/backend.ts";
-import { FAKE_SERVER_URL } from "./e2e/visual/fixtures.ts";
+import { FAKE_SERVER_PORT, FAKE_SERVER_URL } from "./e2e/visual/fixtures.ts";
 
 // E2E runs its own backend and frontend on dedicated ports so it never
 // touches the `npm start` servers (4000 / 5173) or their in-memory state.
@@ -10,10 +10,6 @@ const baseURL = `http://127.0.0.1:${FRONTEND_PORT}`;
 const VISUAL_FRONTEND_PORT = 5175;
 const visualBaseURL = `http://127.0.0.1:${VISUAL_FRONTEND_PORT}`;
 const isCI = !!process.env.CI;
-
-// Socket.IO's polling handshake answers once the server is up.
-const socketIoReadyURL = (serverURL: string) =>
-  `${serverURL}/socket.io/?EIO=4&transport=polling`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -44,9 +40,9 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "node ../backend/src/main.ts",
-      env: { PORT: String(BACKEND_PORT), DELAY_SCALE: "0.05" },
-      url: socketIoReadyURL(backendURL),
+      command: `npx wrangler dev --port ${BACKEND_PORT} --ip 127.0.0.1 --var DELAY_SCALE:0.05`,
+      cwd: "../backend",
+      port: BACKEND_PORT,
       reuseExistingServer: !isCI,
     },
     {
@@ -61,7 +57,7 @@ export default defineConfig({
       : [
           {
             command: "node e2e/visual/fakeServer.ts",
-            url: socketIoReadyURL(FAKE_SERVER_URL),
+            port: FAKE_SERVER_PORT,
             reuseExistingServer: true,
           },
           {

@@ -1,10 +1,13 @@
 import { createServer, type IncomingMessage } from "node:http";
-import { Server } from "socket.io";
+import { WebSocketServer, type WebSocket } from "ws";
 import type {
   Ack,
   Chat,
   ProtocolErrorCode,
+  RequestFrame,
+  RequestName,
   ServerEventName,
+  ServerFrame,
 } from "../../src/chat/protocol.ts";
 import { FAKE_SERVER_PORT, FIXTURE_CHATS } from "./fixtures.ts";
 
@@ -29,6 +32,49 @@ const rejection = (code: ProtocolErrorCode): Ack<never> => ({
   error: { code, message: code },
 });
 
+const readPayload = (payload: unknown) =>
+  (typeof payload === "object" && payload !== null ? payload : {}) as Record<
+    string,
+    unknown
+  >;
+
+const send = (socket: WebSocket, frame: ServerFrame) =>
+  socket.send(JSON.stringify(frame));
+
+const answer = (
+  name: RequestName,
+  payload: unknown
+): Ack<Record<string, unknown>> => {
+  switch (name) {
+    case "chats:list":
+      return {
+        ok: true,
+        chats: chats.map(({ id, title, status, updatedAt }) => ({
+          id,
+          title,
+          status,
+          updatedAt,
+        })),
+      };
+    case "chat:get": {
+      const chat = findChat(readPayload(payload).chatId);
+      return chat ? { ok: true, chat } : rejection("UNKNOWN_CHAT");
+    }
+    // Rejects like the real backend; an accepted Message starts no Turn.
+    case "message:send": {
+      const { chatId, text } = readPayload(payload);
+      const chat = findChat(chatId);
+      if (!chat) return rejection("UNKNOWN_CHAT");
+      if (chat.status === "finished") return rejection("CHAT_FINISHED");
+      if (chat.status === "responding") return rejection("CHAT_RESPONDING");
+      if (String(text).trim() !== chat.suggestion) {
+        return rejection("UNEXPECTED_MESSAGE");
+      }
+      return { ok: true, messageId: `${chatId}-sent` };
+    }
+  }
+};
+
 const readEmitRequest = async (request: IncomingMessage) => {
   let body = "";
   for await (const chunk of request) body += chunk;
@@ -47,8 +93,7 @@ const httpServer = createServer(async (request, response) => {
       break;
     case "/control/drop":
       refusingConnections = true;
-      // Closing the transport, not the socket, so the client tries to reconnect.
-      for (const socket of io.sockets.sockets.values()) socket.conn.close();
+      for (const socket of sockets.clients) socket.terminate();
       break;
     case "/control/emit": {
       const { name, ...payload } = await readEmitRequest(request);
@@ -58,7 +103,13 @@ const httpServer = createServer(async (request, response) => {
         return;
       }
       chat.seq += 1;
-      io.emit(name, { ...payload, seq: chat.seq });
+      for (const socket of sockets.clients) {
+        send(socket, {
+          type: "event",
+          name,
+          event: { ...payload, seq: chat.seq },
+        } as ServerFrame);
+      }
       break;
     }
     default:
@@ -68,41 +119,19 @@ const httpServer = createServer(async (request, response) => {
   response.writeHead(204).end();
 });
 
-const io = new Server(httpServer, {
-  cors: { origin: /^http:\/\/127\.0\.0\.1(:\d+)?$/ },
-  allowRequest: (_request, callback) => callback(null, !refusingConnections),
-});
+const sockets = new WebSocketServer({ noServer: true });
 
-io.on("connection", (socket) => {
-  socket.on("chats:list", (respond) =>
-    respond({
-      ok: true,
-      chats: chats.map(({ id, title, status, updatedAt }) => ({
-        id,
-        title,
-        status,
-        updatedAt,
-      })),
-    })
-  );
-
-  socket.on("chat:get", ({ chatId }, respond) => {
-    const chat = findChat(chatId);
-    respond(chat ? { ok: true, chat } : rejection("UNKNOWN_CHAT"));
-  });
-
-  // Rejects like the real backend; an accepted Message starts no Turn.
-  socket.on("message:send", ({ chatId, text }, respond) => {
-    const chat = findChat(chatId);
-    if (!chat) return respond(rejection("UNKNOWN_CHAT"));
-    if (chat.status === "finished") return respond(rejection("CHAT_FINISHED"));
-    if (chat.status === "responding") {
-      return respond(rejection("CHAT_RESPONDING"));
-    }
-    if (String(text).trim() !== chat.suggestion) {
-      return respond(rejection("UNEXPECTED_MESSAGE"));
-    }
-    respond({ ok: true, messageId: `${chatId}-sent` });
+httpServer.on("upgrade", (request, socket, head) => {
+  if (request.url !== "/ws" || refusingConnections) {
+    // Refused before the handshake, so the client sees a failed connect.
+    socket.end("HTTP/1.1 503 Service Unavailable\r\n\r\n");
+    return;
+  }
+  sockets.handleUpgrade(request, socket, head, (ws) => {
+    ws.on("message", (data) => {
+      const { id, name, payload } = JSON.parse(String(data)) as RequestFrame;
+      send(ws, { type: "ack", id, ack: answer(name, payload) });
+    });
   });
 });
 
