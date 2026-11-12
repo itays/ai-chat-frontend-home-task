@@ -1,0 +1,21 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Scripted Socket.IO backend for the AI chat frontend home task",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "socket.io-client": "^4.8.4",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

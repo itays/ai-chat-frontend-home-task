@@ -1,0 +1,22 @@
+{
+  "name": "ai-chat-home-task",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "allowScripts": {
+    "fsevents@2.3.3": false
+  },
+  "scripts": {
+    "start": "concurrently --names backend,frontend --prefix-colors blue,green --kill-others-on-fail \"npm run start -w backend\" \"npm run dev -w frontend\"",
+    "test": "npm test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
+}
