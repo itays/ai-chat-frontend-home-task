@@ -1,66 +1,112 @@
-import type { AddressInfo } from 'node:net';
-import { io as connect, type Socket } from 'socket.io-client';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { unstable_startWorker } from 'wrangler';
 import { blockId, messageId, toFinalBlock } from '../src/blocks.ts';
-import type { Ack, Chat, ChatSummary, Message } from '../src/protocol.ts';
-import { loadScripts, type ChatScript } from '../src/script.ts';
-import { createChatServer } from '../src/server.ts';
+import type { Ack, Chat, ChatSummary, Message, ServerFrame } from '../src/protocol.ts';
+import { SCRIPTS as scripts, type ChatScript } from '../src/script.ts';
 
-type EventPayload = { chatId: string; seq: number; [key: string]: unknown };
-type ReceivedEvent = EventPayload & { name: string };
+type ReceivedEvent = { name: string; chatId: string; seq: number; [key: string]: unknown };
 
-const scripts = loadScripts();
-const cleanups: (() => void)[] = [];
-
-afterEach(() => {
-  cleanups.splice(0).forEach((cleanup) => cleanup());
-});
-
-const startClient = async (): Promise<Socket> => {
-  const { httpServer, io } = createChatServer({ scripts, delayScale: 0 });
-  await new Promise<void>((resolve) => httpServer.listen(0, resolve));
-  const { port } = httpServer.address() as AddressInfo;
-  const client = connect(`http://localhost:${port}`, { transports: ['websocket'] });
-  cleanups.push(() => {
-    client.close();
-    io.close();
-  });
-  return client;
+type Client = {
+  request: <T extends object>(name: string, payload?: unknown) => Promise<Ack<T>>;
+  onEvent: (listener: (event: ReceivedEvent) => void) => () => void;
 };
 
-const getChat = async (client: Socket, chatId: string): Promise<Chat> => {
-  const response: Ack<{ chat: Chat }> = await client.emitWithAck('chat:get', { chatId });
+const WRANGLER_CONFIG = fileURLToPath(new URL('../wrangler.jsonc', import.meta.url));
+
+const cleanups: (() => Promise<void> | void)[] = [];
+
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) {
+    await cleanup();
+  }
+});
+
+const connect = async (url: URL): Promise<Client> => {
+  const socket = new WebSocket(url);
+  await new Promise((resolve, reject) => {
+    socket.addEventListener('open', resolve, { once: true });
+    socket.addEventListener('error', reject, { once: true });
+  });
+  cleanups.push(() => socket.close());
+
+  const pending = new Map<number, (ack: Ack<object>) => void>();
+  const listeners = new Set<(event: ReceivedEvent) => void>();
+  let lastId = 0;
+  socket.addEventListener('message', ({ data }) => {
+    const frame = JSON.parse(String(data)) as ServerFrame;
+    if (frame.type === 'ack') {
+      pending.get(frame.id)?.(frame.ack);
+      pending.delete(frame.id);
+    } else {
+      listeners.forEach((listener) => listener({ ...frame.event, name: frame.name }));
+    }
+  });
+
+  return {
+    request: <T extends object>(name: string, payload?: unknown) =>
+      new Promise<Ack<T>>((resolve) => {
+        const id = ++lastId;
+        pending.set(id, resolve as (ack: Ack<object>) => void);
+        socket.send(JSON.stringify({ id, name, payload }));
+      }),
+    onEvent: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+};
+
+// A worker per test, so each test starts from the scripted Chats.
+const startClient = async (): Promise<Client> => {
+  const worker = await unstable_startWorker({
+    config: WRANGLER_CONFIG,
+    bindings: { DELAY_SCALE: { type: 'plain_text', value: '0' } },
+    dev: {
+      server: { hostname: '127.0.0.1', port: 0 },
+      inspector: false,
+      watch: false,
+      persist: false,
+    },
+  });
+  cleanups.push(() => worker.dispose());
+  const url = new URL('/ws', await worker.url);
+  url.protocol = 'ws:';
+  return connect(url);
+};
+
+const getChat = async (client: Client, chatId: string): Promise<Chat> => {
+  const response = await client.request<{ chat: Chat }>('chat:get', { chatId });
   if (!response.ok) {
     throw new Error(response.error.message);
   }
   return response.chat;
 };
 
-const send = (client: Socket, chatId: string, text: string) =>
-  client.emitWithAck('message:send', { chatId, text });
+const send = (client: Client, chatId: string, text: string) =>
+  client.request<{ messageId: string }>('message:send', { chatId, text });
 
-const recordEvents = (client: Socket, chatId: string): ReceivedEvent[] => {
+const recordEvents = (client: Client, chatId: string): ReceivedEvent[] => {
   const events: ReceivedEvent[] = [];
-  client.onAny((name: string, event: EventPayload) => {
+  client.onEvent((event) => {
     if (event.chatId === chatId) {
-      events.push({ name, ...event });
+      events.push(event);
     }
   });
   return events;
 };
 
-const waitForTurnEnd = (client: Socket, chatId: string): Promise<void> =>
+const waitForTurnEnd = (client: Client, chatId: string): Promise<void> =>
   new Promise((resolve) => {
-    const listener = (name: string, event: EventPayload) => {
-      if (name === 'chat:status' && event.chatId === chatId && event.status !== 'responding') {
-        client.offAny(listener);
+    const stop = client.onEvent((event) => {
+      if (event.name === 'chat:status' && event.chatId === chatId && event.status !== 'responding') {
+        stop();
         resolve();
       }
-    };
-    client.onAny(listener);
+    });
   });
 
-const playTurn = async (client: Socket, chatId: string, text: string) => {
+const playTurn = async (client: Client, chatId: string, text: string) => {
   const turnEnd = waitForTurnEnd(client, chatId);
   const response = await send(client, chatId, text);
   await turnEnd;
@@ -103,7 +149,7 @@ describe('chat backend', () => {
   it('lists every scripted chat in order', async () => {
     const client = await startClient();
 
-    const response: Ack<{ chats: ChatSummary[] }> = await client.emitWithAck('chats:list');
+    const response = await client.request<{ chats: ChatSummary[] }>('chats:list');
 
     expect(response).toEqual({
       ok: true,
@@ -149,16 +195,14 @@ describe('chat backend', () => {
     const client = await startClient();
     const [script] = scripts;
     const order: string[] = [];
-    client.onAny((_name: string, event: EventPayload) => {
+    client.onEvent((event) => {
       if (event.chatId === script!.id) {
         order.push('event');
       }
     });
 
     const turnEnd = waitForTurnEnd(client, script!.id);
-    client.emit('message:send', { chatId: script!.id, text: script!.turns[0]!.expect }, () =>
-      order.push('ack'),
-    );
+    void send(client, script!.id, script!.turns[0]!.expect).then(() => order.push('ack'));
     await turnEnd;
 
     expect(order[0]).toBe('ack');
@@ -205,21 +249,25 @@ describe('chat backend', () => {
   it('rejects unknown chats and invalid payloads', async () => {
     const client = await startClient();
 
-    expect(await client.emitWithAck('chat:get', { chatId: 'missing' })).toMatchObject({
+    expect(await client.request('chat:get', { chatId: 'missing' })).toMatchObject({
       ok: false,
       error: { code: 'UNKNOWN_CHAT' },
     });
-    expect(await client.emitWithAck('chat:get')).toMatchObject({
+    expect(await client.request('chat:get')).toMatchObject({
       ok: false,
       error: { code: 'INVALID_REQUEST' },
     });
-    expect(await client.emitWithAck('message:send', { chatId: 1, text: 'Hi' })).toMatchObject({
+    expect(await client.request('message:send', { chatId: 1, text: 'Hi' })).toMatchObject({
       ok: false,
       error: { code: 'INVALID_REQUEST' },
     });
     expect(await send(client, 'missing', 'Hi')).toMatchObject({
       ok: false,
       error: { code: 'UNKNOWN_CHAT' },
+    });
+    expect(await client.request('chats:delete')).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_REQUEST' },
     });
   });
 });

@@ -77,9 +77,9 @@ export class Conversations {
     progress.turnIndex += 1;
     const userMessageId = this.#store.nextMessageId(chatId);
     // Deferred so the acknowledgement reaches the client before the turn's events.
-    setImmediate(() => {
+    setTimeout(() => {
       void this.#runTurn(progress, turn, userMessageId, trimmed);
-    });
+    }, 0);
     return { ok: true, messageId: userMessageId };
   }
 

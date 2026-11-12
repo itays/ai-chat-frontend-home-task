@@ -2,20 +2,19 @@
   "name": "backend",
   "version": "1.0.0",
   "private": true,
-  "description": "Scripted Socket.IO backend for the AI chat frontend home task",
+  "description": "Scripted WebSocket chat backend on a Cloudflare Worker and Durable Object",
   "type": "module",
   "scripts": {
-    "start": "node src/main.ts",
+    "start": "wrangler dev --port 4000",
+    "deploy": "wrangler deploy --assets ../frontend/dist",
     "test": "vitest run",
-    "typecheck": "tsc"
-  },
-  "dependencies": {
-    "socket.io": "^4.8.4"
+    "typecheck": "tsc && tsc -p test"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261112.1",
     "@types/node": "^24.19.2",
-    "socket.io-client": "^4.8.4",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "wrangler": "^4.161.0"
   }
 }

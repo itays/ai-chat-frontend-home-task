@@ -10,7 +10,9 @@
     "frontend"
   ],
   "allowScripts": {
-    "fsevents@2.3.3": false
+    "fsevents@2.3.3": false,
+    "esbuild": false,
+    "workerd": false
   },
   "scripts": {
     "start": "concurrently --names backend,frontend --prefix-colors blue,green --kill-others-on-fail \"npm run start -w backend\" \"npm run dev -w frontend\"",

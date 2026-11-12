@@ -1,4 +1,6 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import vpnAccess from '../scripts/01-vpn-access.json' with { type: 'json' };
+import newHireSetup from '../scripts/02-new-hire-setup.json' with { type: 'json' };
+import incidentTriage from '../scripts/03-incident-triage.json' with { type: 'json' };
 import type { TableColumn } from './protocol.ts';
 
 export type BlockStep =
@@ -27,15 +29,5 @@ export type ChatScript = {
   turns: ScriptTurn[];
 };
 
-const SCRIPTS_DIR = new URL('../scripts/', import.meta.url);
-
-export const loadScripts = (): ChatScript[] =>
-  readdirSync(SCRIPTS_DIR)
-    .filter((file) => file.endsWith('.json'))
-    .sort()
-    .map(
-      (file) =>
-        JSON.parse(
-          readFileSync(new URL(file, SCRIPTS_DIR), 'utf8'),
-        ) as ChatScript,
-    );
+// In filename order, which is the order the Chats are listed in.
+export const SCRIPTS = [vpnAccess, newHireSetup, incidentTriage] as ChatScript[];

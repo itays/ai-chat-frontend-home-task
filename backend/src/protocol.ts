@@ -89,3 +89,13 @@ export type ServerEvent<N extends ServerEventName> = {
   chatId: string;
   seq: number;
 } & ServerEventPayloads[N];
+
+export type RequestName = 'chats:list' | 'chat:get' | 'message:send';
+
+export type RequestFrame = { id: number; name: RequestName; payload?: unknown };
+
+export type ServerFrame =
+  | { type: 'ack'; id: number; ack: Ack<object> }
+  | {
+      [N in ServerEventName]: { type: 'event'; name: N; event: ServerEvent<N> };
+    }[ServerEventName];
