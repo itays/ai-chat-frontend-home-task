@@ -1,5 +1,7 @@
 # Fake Socket.IO server for visual tests
 
+The fake server now speaks the plain WebSocket protocol, since the backend left Socket.IO ([ADR-0003](0003-cloudflare-worker-and-durable-object.md)).
+
 Visual regression tests run the real app against a fake Socket.IO server started by Playwright on its own port, which serves frozen fixture Snapshots (mid-stream responses, running and failed Tool Calls, Unknown Blocks, a finished Chat) and only emits events when a test asks it to over HTTP; like the real backend, it rejects a sent Message that does not match the Suggestion. The app is pointed at it via the existing `VITE_BACKEND_URL`, so production code contains no test hooks, and every screenshot exercises the full path from socket to pixels with deterministic data.
 
 Baselines are generated on macOS and the visual project is tagged `@visual` and excluded from CI, because font rendering differs between macOS and the Linux CI runner. The fix — generating and running baselines inside the official Playwright Docker image — is deferred.

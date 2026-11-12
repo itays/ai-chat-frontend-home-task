@@ -1,8 +1,8 @@
 # Chat Protocol
 
-The backend is a Socket.IO server at `http://localhost:4000`. There is no authentication and a single implicit user.
+The backend is a WebSocket endpoint at `/ws`: `ws://localhost:4000/ws` locally, and the same path on the deployed Worker's origin. There is no authentication and a single implicit user.
 
-All state lives in backend memory. It survives browser refreshes and resets when the backend restarts.
+All state lives in memory in one Durable Object. It survives browser refreshes. It resets when the backend restarts, and when Cloudflare evicts the Durable Object, which can happen once no client is connected.
 
 ## Conversations
 
@@ -76,9 +76,41 @@ Any block may arrive with a `type` not listed above. Such blocks always have `id
 
 `markdown` text is untrusted. Do not render raw HTML from it.
 
+## Transport
+
+Open a WebSocket to `/ws`. A request to `/ws` without `Upgrade: websocket` gets `426`. Every frame is a JSON text message.
+
+The client sends request frames:
+
+```ts
+type RequestFrame = {
+  id: number; // an integer the client picks; the acknowledgement carries it back
+  name: 'chats:list' | 'chat:get' | 'message:send';
+  payload?: unknown;
+};
+```
+
+The server sends acknowledgement and event frames:
+
+```ts
+type ServerFrame =
+  | { type: 'ack'; id: number; ack: Ack }
+  | { type: 'event'; name: ServerEventName; event: { chatId: string; seq: number; ... } };
+```
+
+For example:
+
+```text
+→ {"id":1,"name":"chat:get","payload":{"chatId":"vpn-access"}}
+← {"type":"ack","id":1,"ack":{"ok":true,"chat":{"id":"vpn-access", ...}}}
+← {"type":"event","name":"chat:status","event":{"chatId":"vpn-access","seq":2,"status":"responding","updatedAt":"..."}}
+```
+
+An acknowledgement goes only to the socket that sent the request. A request whose socket closes gets no acknowledgement, and a new socket does not receive it. Frames that are not JSON objects with an integer `id` are ignored, because they cannot be acknowledged.
+
 ## Client requests
 
-Requests are emitted with a Socket.IO acknowledgement callback, for example `socket.emitWithAck('chat:get', { chatId })`. Every acknowledgement has the shape `{ ok: true, ... } | { ok: false, error: ProtocolError }`.
+Each request is a request frame whose `name` and `payload` are given below. Every acknowledgement (`ack` in the frame) has the shape `{ ok: true, ... } | { ok: false, error: ProtocolError }`. A request with an unknown `name` fails with `INVALID_REQUEST`.
 
 ```ts
 type ProtocolError = {
@@ -124,7 +156,7 @@ A rejected message does not change the chat.
 
 ## Server events
 
-The server emits events for **every** chat to every connected client, whether or not the client is displaying that chat.
+The server sends event frames for **every** chat to every connected client, whether or not the client is displaying that chat. Each heading below is an event frame's `name`, and the shape below it is its `event`.
 
 Every event payload includes `chatId` and `seq`.
 
@@ -177,6 +209,8 @@ The message will receive no more events.
 - The acknowledgement of an accepted `message:send` arrives before any event of the turn it starts.
 
 ## Example turn
+
+In shorthand: `→` is a request frame, `← ack` its acknowledgement frame, and every other `←` an event frame.
 
 ```text
 → message:send       { chatId: "vpn-access", text: "Yes, please reset it." }

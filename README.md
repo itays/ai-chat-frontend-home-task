@@ -8,6 +8,7 @@ Domain terms (Chat, Turn, Suggestion, Rejected Message, Block, Unknown Block, Sn
 
 - [Run it](#run-it)
 - [Test it](#test-it)
+- [Deploy](#deploy)
 - [Architecture](#architecture)
 - [Library choices and alternatives](#library-choices-and-alternatives)
 - [How AI was used](#how-ai-was-used)
@@ -24,14 +25,14 @@ npm start
 
 `npm start` runs both apps:
 
-- Backend: `http://localhost:4000` (`npm start -w backend` on its own)
+- Backend: `http://localhost:4000`, run by `wrangler dev` (`npm start -w backend` on its own)
 - Frontend: `http://localhost:5173` (`npm run dev -w frontend` on its own)
 
-The backend keeps all state in memory. A browser refresh restores every Chat, including one that is responding; restarting the backend resets every Chat to the start of its script.
+The backend keeps all state in memory in one Durable Object. A browser refresh restores every Chat, including one that is responding; restarting the backend resets every Chat to the start of its script.
 
 | Folder | Contents |
 | --- | --- |
-| [`backend/`](backend) | The scripted Socket.IO backend, unchanged from the starter. |
+| [`backend/`](backend) | The scripted backend: a Cloudflare Worker and one Durable Object that speak JSON over a WebSocket. The starter's Socket.IO server was ported to it so the app can be deployed ([ADR-0003](docs/adr/0003-cloudflare-worker-and-durable-object.md)); the scripts and Chat logic are unchanged. |
 | [`frontend/`](frontend) | The client. All the work is here. |
 | [`docs/`](docs) | The assignment, the [implementation plan](docs/plan.md), [ADRs](docs/adr), and agent configuration. |
 
@@ -39,15 +40,15 @@ The backend keeps all state in memory. A browser refresh restores every Chat, in
 
 | Variable | Where | Default | Purpose |
 | --- | --- | --- | --- |
-| `VITE_BACKEND_URL` | `frontend/.env.local` | `http://localhost:4000` | Backend URL used by the frontend. |
-| `PORT` | Environment | `4000` | Backend port. |
-| `DELAY_SCALE` | Environment | `1` | Multiplies every streaming delay. `0.2` is five times faster; `0` is instant. |
+| `VITE_BACKEND_URL` | `frontend/.env.local` | `http://localhost:4000` in development, the page's own origin in a production build | Backend URL used by the frontend. |
+| `--port` | `wrangler dev` flag in the backend's `start` script | `4000` | Backend port. |
+| `DELAY_SCALE` | `npm start -w backend -- --var DELAY_SCALE:0.2`, or `DELAY_SCALE=0.2` in `backend/.dev.vars` | `1` (`backend/wrangler.jsonc`) | Multiplies every streaming delay. `0.2` is five times faster; `0` is instant. |
 
 ## Test it
 
 | Command | What it runs |
 | --- | --- |
-| `npm test` | Unit tests of every workspace (backend and frontend). |
+| `npm test` | Unit tests of every workspace. The backend's protocol tests run against the real Worker, started per test with wrangler's `unstable_startWorker`. |
 | `npm run test -w frontend` | Frontend unit tests once (Vitest, React Testing Library, jsdom). |
 | `npm run test:watch -w frontend` | The same in watch mode. |
 | `npm run lint -w frontend` | oxlint, warnings fail. |
@@ -64,17 +65,28 @@ The backend keeps all state in memory. A browser refresh restores every Chat, in
 
 **Unit tests** sit next to the code as `src/**/*.test.ts(x)`. They cover the reducer and Sequence Number gate, `chatSync` against a fake transport (buffering, Gaps, replacement on reconnect, late responses from a dropped connection, retries, sends), Block validation, and the UI, rendered as the whole `App` over a seeded store with mocked actions (`src/test/renderApp.tsx`).
 
-**End-to-end tests** (`frontend/e2e/*.e2e.ts`) run in the `chromium` project. Playwright starts its own backend on port 4100 with `DELAY_SCALE=0.05` and a frontend on 5174, so they never touch the `npm start` servers. The specs share that backend, so each one advances a different Chat; [`docs/plan.md`](docs/plan.md) (slice 7) records which.
+**End-to-end tests** (`frontend/e2e/*.e2e.ts`) run in the `chromium` project. Playwright starts its own backend (`wrangler dev`) on port 4100 with `DELAY_SCALE` 0.05 and a frontend on 5174, so they never touch the `npm start` servers. The specs share that backend, so each one advances a different Chat; [`docs/plan.md`](docs/plan.md) (slice 7) records which.
 
-**Visual tests** (`frontend/e2e/visual/`) run the real app against a fake Socket.IO server on port 4200 that serves frozen fixture Snapshots and is steered over HTTP (`/control/reset`, `/control/drop`, `/control/emit`), with a frontend on 5175. The project runs one test at a time because the fake server's state is shared. Baselines are rendered on macOS, so CI skips this project; see [ADR-0002](docs/adr/0002-fake-socket-server-for-visual-tests.md).
+**Visual tests** (`frontend/e2e/visual/`) run the real app against a fake WebSocket server on port 4200 that serves frozen fixture Snapshots and is steered over HTTP (`/control/reset`, `/control/drop`, `/control/emit`), with a frontend on 5175. The project runs one test at a time because the fake server's state is shared. Baselines are rendered on macOS, so CI skips this project; see [ADR-0002](docs/adr/0002-fake-socket-server-for-visual-tests.md).
 
 **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lint, typecheck, unit tests, the frontend build, and the `chromium` e2e project. A husky pre-commit hook runs Prettier on staged files (lint-staged), then lint, typecheck, and unit tests.
+
+## Deploy
+
+The app deploys to Cloudflare's free plan as one Worker. The Worker serves the built frontend as static assets and the backend at `/ws` on the same origin, so the production build needs no `VITE_BACKEND_URL`. One Durable Object keeps every Chat in memory, as the local backend does.
+
+```bash
+npx wrangler login
+npm run deploy
+```
+
+`npm run deploy` builds the frontend, then runs `wrangler deploy` from `backend/` with `frontend/dist` as the assets directory. The deployed Chats reset when the Durable Object restarts, which can happen once no client is connected.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  backend[(Backend)] <-->|Socket.IO| transport[ChatTransport]
+  backend[(Backend)] <-->|WebSocket /ws| transport[ChatTransport]
   transport -->|connect, disconnect, events| sync[chatSync]
   sync -->|chats:list, chat:get, message:send| transport
   sync -->|applyEvent| reducer[Pure reducer]
@@ -89,7 +101,7 @@ Protocol events become Chat state in one place, and React only reads the result.
 
 ### From socket to store
 
-- **`ChatTransport`** (`chat/transport.ts`) is the seam over `socket.io-client`: `request` (resolves with the acknowledgement, rejects after 10 s), `subscribe` (connect, disconnect, connect error, and every server event), and `connect`. Unit tests replace it with a fake.
+- **`ChatTransport`** (`chat/transport.ts`) is the seam over the browser's `WebSocket`: `request` (resolves with the acknowledgement, rejects after 10 s or when the socket closes), `subscribe` (connect, disconnect, connect error, and every server event), and `connect`. It reconnects on its own with a backoff of 1 s doubling up to 5 s, with jitter. Its unit tests use a fake `WebSocket`; the other unit tests replace the whole transport with a fake.
 - **`chatSync`** (`chat/chatSync.ts`) owns the connection lifecycle, as decided in [ADR-0001](docs/adr/0001-sequence-gated-reducer-with-snapshot-replacement.md):
   - On every connect it calls `chats:list`, then `chat:get` for every Chat at once, so background Chats stay current and switching Chats never waits.
   - Events that arrive while the list or a Chat's Snapshot is in flight are buffered per Chat, then replayed on top of the Snapshot through the same gate.
@@ -98,7 +110,7 @@ Protocol events become Chat state in one place, and React only reads the result.
   - Each connect bumps a generation counter, so a response that belongs to an earlier connection is ignored.
   - It records the connection status and the fact that the Chat list has arrived.
   - `sendMessage` refuses while disconnected and reports a Rejected Message, another protocol error, or a timeout. There is no optimistic bubble: the user's Message appears when `message:created` arrives.
-- **The reducer** (`chat/reducer.ts`) is a pure `applyEvent(chat, event)` with no Zustand, React, or Socket.IO imports. It returns `stale` for a Sequence Number at or below the Chat's, `applied` for the next one, and `gap` for anything higher, or for an event that names a Message or Block the Chat does not have. Updates use spreads with structural sharing, so only the Message and Block an event touches get new identities. No Immer.
+- **The reducer** (`chat/reducer.ts`) is a pure `applyEvent(chat, event)` with no Zustand, React, or transport imports. It returns `stale` for a Sequence Number at or below the Chat's, `applied` for the next one, and `gap` for anything higher, or for an event that names a Message or Block the Chat does not have. Updates use spreads with structural sharing, so only the Message and Block an event touches get new identities. No Immer.
 - **The store** (`chat/store.ts`) is a vanilla Zustand store: connection status, whether the Chat list has arrived, Chat order as listed by the backend, and per Chat its list summary, its Chat (Snapshot plus applied events), and whether its Snapshot is loading, ready, or failed.
 - **Startup**: `main.tsx` creates the transport, store, and `chatSync` outside React, so StrictMode's double mount cannot open two sockets, and hands them to React through a context. Components read with `useChatState(selector)` and act through `useChatActions()`.
 
@@ -126,7 +138,7 @@ Protocol events become Chat state in one place, and React only reads the result.
 
 | Situation | What the user sees |
 | --- | --- |
-| The server is unreachable before any Chat is listed | Full-page "Can't reach the server" with Retry. Retry connects immediately instead of waiting out Socket.IO's backoff. |
+| The server is unreachable before any Chat is listed | Full-page "Can't reach the server" with Retry. Retry connects immediately instead of waiting out the reconnection backoff. |
 | The connection drops after Chats are listed | Chats stay on screen, a "Reconnecting to server…" banner shows, and Send is blocked with a reason. |
 | Reconnected, but the Chat list fails to load | Banner "Couldn't refresh your chats" with Retry. |
 | One Chat's Snapshot fails before it ever loaded | That Chat alone shows "Couldn't load this chat" with Retry. |
@@ -146,6 +158,7 @@ Protocol events become Chat state in one place, and React only reads the result.
 
 - [ADR-0001: Sequence-gated reducer with Snapshot replacement on (re)connect](docs/adr/0001-sequence-gated-reducer-with-snapshot-replacement.md)
 - [ADR-0002: Fake Socket.IO server for visual tests](docs/adr/0002-fake-socket-server-for-visual-tests.md)
+- [ADR-0003: Cloudflare Worker and Durable Object over plain WebSockets](docs/adr/0003-cloudflare-worker-and-durable-object.md)
 - [`docs/plan.md`](docs/plan.md) has the smaller decisions (layout, rendering, input, testing) and the slice plan.
 
 ## Library choices and alternatives
@@ -156,7 +169,7 @@ Protocol events become Chat state in one place, and React only reads the result.
 | **`react-markdown` + `remark-gfm`** | Renders untrusted markdown without raw HTML, with safe links by default. | Streamdown handles unterminated syntax while streaming. Without it, a half-streamed `**bold` shows its asterisks for a word until the closing marker arrives; this flicker was accepted. |
 | **No chat SDK** | The backend pushes events for every Chat, including Turns this tab never started; Sequence Numbers decide what applies. | `useChat` from the Vercel AI SDK or TanStack AI models a client-initiated request and response stream. It would still need the same sequencing plus a translation into its message model ([ADR-0001](docs/adr/0001-sequence-gated-reducer-with-snapshot-replacement.md)). |
 | **shadcn/ui + Tailwind v4** | Components live in the repo (`src/components/ui`, Base UI flavour) and can be edited. The sidebar with its mobile sheet, `message`, `bubble`, and `message-scroller` cover most of the chat layout. | — |
-| **`socket.io-client`** | Required by the assignment. Wrapped behind `ChatTransport` so tests do not need a socket. | — |
+| **Plain `WebSocket`** | The browser's own API, wrapped behind `ChatTransport` so tests do not need a socket. The backend moved to a Cloudflare Worker, which cannot host a Socket.IO server ([ADR-0003](docs/adr/0003-cloudflare-worker-and-durable-object.md)). | `socket.io-client`, which the assignment required and the app used until then. |
 | **Vitest + React Testing Library** | Uses the same Vite plugins and `@/` alias as the app; tests query by role and text. | Jest would need its own transform and alias setup. |
 | **Playwright** | Real browser against the real backend for e2e, plus screenshot comparison for visual tests. | Storybook with screenshots was considered for visual tests and rejected as too much setup ([ADR-0002](docs/adr/0002-fake-socket-server-for-visual-tests.md)). |
 | **oxlint** | `typescript-eslint` cannot parse with TypeScript 7, which this project uses. oxlint runs the TypeScript, React hooks, `jsx-a11y`, import, and Vitest rule sets. | ESLint with `typescript-eslint`, once it supports TypeScript 7. |
@@ -185,7 +198,7 @@ Commits made by the agent carry a `Co-Authored-By: Claude` trailer.
 - **Visual tests in CI.** Baselines are macOS-only; generating and running them in the official Playwright Docker image would let CI run them ([ADR-0002](docs/adr/0002-fake-socket-server-for-visual-tests.md)).
 - **Persisted drafts and unread state.** Both live in memory, so a refresh clears drafts and marks every Chat as read.
 - **Unterminated markdown while streaming.** Accepted one-word flicker; Streamdown or a small pre-pass that closes open markers would fix it.
-- **Bundle size.** The production build warns about a 643 kB JavaScript chunk (204 kB gzipped), over Vite's 500 kB threshold. Unused shadcn components are already removed; what remains is code the app runs: `react-dom` (about a third), the markdown pipeline (about 100 kB), Base UI under the shadcn components, and Socket.IO. Lazy-loading the markdown renderer, or splitting vendor code into its own cacheable chunk, would bring the main chunk under the threshold.
+- **Bundle size.** The production build warns about a 603 kB JavaScript chunk (192 kB gzipped), over Vite's 500 kB threshold. Unused shadcn components are already removed; what remains is code the app runs: `react-dom` (about a third), the markdown pipeline (about 100 kB), and Base UI under the shadcn components. Lazy-loading the markdown renderer, or splitting vendor code into its own cacheable chunk, would bring the main chunk under the threshold.
 - **Long Chats.** The message list is not virtualised. The scripted Chats are short, so it was not needed.
-- **E2E isolation.** The e2e specs share one backend and coordinate which Chat each one advances. A backend per spec, or a reset hook, would remove that coupling, but the backend must not be modified.
+- **E2E isolation.** The e2e specs share one backend and coordinate which Chat each one advances. A backend per spec, or a reset hook, would remove that coupling.
 - **Error detail.** Send failures other than a Rejected Message (timeout, disconnect, other protocol errors) share one generic message.
