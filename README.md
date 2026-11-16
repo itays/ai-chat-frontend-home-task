@@ -82,6 +82,8 @@ npm run deploy
 
 `npm run deploy` builds the frontend, then runs `wrangler deploy` from `backend/` with `frontend/dist` as the assets directory. The deployed Chats reset when the Durable Object restarts, which can happen once no client is connected.
 
+It is live at <https://ai-chat.itaysidis.workers.dev>. CI deploys every push to `main` once lint, typecheck, unit and E2E tests pass (the `deploy` job in `.github/workflows/ci.yml`). The job reads two repository secrets: `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_API_TOKEN`, an API token with the **Edit Cloudflare Workers** template.
+
 ## Architecture
 
 ```mermaid
