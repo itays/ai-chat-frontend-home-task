@@ -2,6 +2,8 @@
 
 A React and TypeScript client for a scripted, streaming AI chat backend: a sidebar of Chats and an open Chat whose assistant responses stream in as Blocks. The assignment is in [`docs/home-task.md`](docs/home-task.md); the backend contract is in [`backend/PROTOCOL.md`](backend/PROTOCOL.md).
 
+**Live demo:** <https://ai-chat.itaysidis.workers.dev>. Every visitor shares the same Chats, and they reset to the start of their scripts when the backend restarts.
+
 Domain terms (Chat, Turn, Suggestion, Rejected Message, Block, Unknown Block, Snapshot, Sequence Number, Gap) are defined in [`GLOSSARY.md`](GLOSSARY.md) and used throughout this README and the code.
 
 ## Contents
